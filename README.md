@@ -1,95 +1,59 @@
-# Multimodal AI-Based Emotional Wellbeing Monitoring System for Students
+# Multimodal AI Emotional Wellbeing Monitoring System for Students
 
-An intelligent multimodal emotional wellbeing monitoring framework designed to assess student emotional states and alert counselors or teachers in real time.
+This project is a multimodal system designed to analyze student emotional states across audio, visual, and textual inputs to help school counselors and teachers identify students experiencing prolonged distress or anxiety.
 
----
+## Overview
 
-## 🎯 Project Overview
+Student wellbeing often doesn't show up in just one place. A student might sound tired or stressed in their voice, look distressed on video, or write in a withdrawn tone. To handle this, we are building three separate emotion recognition models that will be combined using late fusion:
 
-In educational environments, early detection of negative affective states (such as prolonged sadness, extreme anxiety, fear, or distress) is critical for timely student counseling and intervention. 
+1. **Voice (Speech Emotion Recognition)**: Analyzes tone, pitch, energy, and speech acoustics. Located in `voice_model/`.
+2. **Face (Facial Emotion Recognition)**: Analyzes facial cues and micro-expressions (currently in development).
+3. **Text (Sentiment Analysis)**: Analyzes text input for emotional tone (currently in development).
+4. **Multimodal Fusion**: Aggregates the predictions and uncertainty scores from all active modalities into a single assessment and flags potential concerns for counselors.
 
-This system employs a **Modular Late-Fusion Multimodal Architecture** that processes three distinct modalities:
-1. **🎙️ Voice (Speech Emotion Recognition)**: Acoustic prosody & self-supervised speech representations (WavLM).
-2. **👁️ Face (Facial Expression Recognition)**: Visual facial cues and micro-expressions.
-3. **💬 Text (Linguistic Sentiment Analysis)**: Contextual sentiment and semantic affect from student communication.
+## Repository Layout
 
----
+```
+.
+├── README.md                           # Main project overview
+├── .gitignore                          # Ignores model weights and dataset files
+├── voice_model/                        # Voice emotion recognition pipeline
+│   ├── README.md                       # Voice model details and benchmark results
+│   ├── SIGNALWELL_VOICE_PIPELINE.py    # Training and inference script
+│   ├── SIGNALWELL_VOICE_COLAB.ipynb    # Google Colab notebook (T4 GPU ready)
+│   ├── requirements.txt                # Python dependencies
+│   ├── sample_1.wav                    # Test audio sample
+│   ├── sample_2.wav                    # Test audio sample
+│   └── sample_3.wav                    # Test audio sample
+├── face_model/                         # Face emotion module (in progress)
+├── text_model/                         # Text emotion module (in progress)
+└── multimodal_fusion/                  # Late fusion logic (to be added)
+```
 
-## 🏗️ System Architecture
+## System Workflow
 
 ```mermaid
 flowchart TD
-    subgraph Inputs["Student Multimodal Input Streams"]
-        A["🎙️ Microphone Audio"]
-        B["👁️ Webcam Video"]
-        C["💬 Text / Chat Input"]
-    end
+    Audio[Microphone Audio] --> Voice[Voice Model: WavLM + Prosody]
+    Video[Webcam Video] --> Face[Face Model]
+    Text[Student Text] --> TextMod[Text Model]
 
-    subgraph Modalities["Independent Modality Processing"]
-        A --> VM["Voice Emotion Model\n(WavLM Large + 37-dim Prosody)"]
-        B --> FM["Facial Emotion Model\n(Visual Features / AU)"]
-        C --> TM["Text Sentiment Model\n(NLP Transformer)"]
-    end
+    Voice -->|Probabilities + Uncertainty| Fusion[Late Fusion Engine]
+    Face -->|Probabilities + Confidence| Fusion
+    TextMod -->|Probabilities + Confidence| Fusion
 
-    subgraph Late_Fusion["Multimodal Late Fusion Layer"]
-        VM -->|"Emotion Probs + Uncertainty"| FUS["Attention-Weighted\nLate Fusion Engine"]
-        FM -->|"Emotion Probs + Confidence"| FUS
-        TM -->|"Emotion Probs + Confidence"| FUS
-    end
-
-    subgraph Decision["Wellbeing Decision & Intervention"]
-        FUS --> E["Aggregated Student Affective State"]
-        E --> W["Wellbeing Risk Scoring Engine"]
-        W -->|"High Distress / Sustained Risk"| ALT["🚨 Counselor & Educator Alert Portal"]
-        W -->|"Normal / Mild"| LOG["📊 Longitudinal Wellbeing Dashboard"]
-    end
+    Fusion --> Decision[Consensus Emotion State]
+    Decision --> Alerts[Counselor Notification System]
 ```
 
----
+## Current Status
 
-## 📁 Repository Structure
+- **Voice Model**: Complete. Trained and evaluated on combined speech datasets (RAVDESS, CREMA-D, TESS, SAVEE) with a speaker-independent test split, reaching 68.3% Macro F1 and 68.2% test accuracy. See `voice_model/` for code and instructions.
+- **Face Model**: In progress.
+- **Text Model**: In progress.
+- **Fusion Engine**: Scheduled after all three modality baselines are ready.
 
-```text
-MULTIMODAL-AI-BASED-EMOTIONAL-WELLBEING-MONITORING-SYSTEM-FOR-STUDENTS/
-│
-├── README.md                           # Main Multimodal Project Documentation
-├── .gitignore                          # Global rules ignoring large checkpoints & datasets
-│
-├── voice_model/                        # 🎙️ Voice Emotion Recognition (SignalWell Voice)
-│   ├── README.md                       # Comprehensive Voice module docs & benchmarks
-│   ├── SIGNALWELL_VOICE_PIPELINE.py    # Master training, evaluation & inference pipeline
-│   ├── SIGNALWELL_VOICE_COLAB.ipynb    # All-in-one GPU Colab training & inference notebook
-│   ├── requirements.txt                # Voice dependencies (torch, transformers, librosa)
-│   ├── sample_1.wav                    # Benchmark test sample 1
-│   ├── sample_2.wav                    # Benchmark test sample 2
-│   └── sample_3.wav                    # Benchmark test sample 3
-│
-├── face_model/                         # 👁️ Facial Emotion Recognition (In Development)
-│   └── (To be added)
-│
-├── text_model/                         # 💬 Text Sentiment Analysis (In Development)
-│   └── (To be added)
-│
-└── multimodal_fusion/                  # 🔗 Late-Fusion & Alerting Portal (Planned)
-    └── (To be added)
-```
+## Team
 
----
-
-## 🚀 Active Modules
-
-### 1. Voice Emotion Recognition (`voice_model/`) — ✅ Complete & Benchmarked
-* **Architecture**: Dual-branch hybrid fusing **WavLM Large SSL embeddings** (`1024-dim`) with **Physiological Prosodic Features** (`37-dim`) passed through a **3-Layer Pre-LN Temporal Transformer** with **Attention Pooling** and an **Uncertainty Quantification Head**.
-* **Benchmark Results (Speaker-Independent across RAVDESS, CREMA-D, TESS, SAVEE)**:
-  * **Test Accuracy**: `68.20%`
-  * **Test Macro-F1**: `68.32%`
-  * **Test UAR**: `67.49%`
-* For details, see [voice_model/README.md](voice_model/README.md).
-
----
-
-## 👥 Contributors & Responsibilities
-
-* **Voice Emotion Recognition Module**: Siva Sethamanyu ([@SivaSethamanyu](https://github.com/SivaSethamanyu))
-* **Facial Emotion & Text Sentiment Modules**: Shamith ([@Shamith-247](https://github.com/Shamith-247))
-* **Multimodal Fusion & Integration**: Joint Team Effort
+- Siva Sethamanyu ([@SivaSethamanyu](https://github.com/SivaSethamanyu)) - Voice emotion recognition model
+- Shamith ([@Shamith-247](https://github.com/Shamith-247)) - Face emotion recognition & text sentiment models
