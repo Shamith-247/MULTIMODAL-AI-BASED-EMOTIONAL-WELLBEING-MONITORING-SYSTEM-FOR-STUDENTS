@@ -161,9 +161,9 @@ DATASET_CONFIG = {
     "CREMA-D": True,    # ~7,442 recordings (Multi-speaker diverse acted)
     "TESS": True,       # ~2,800 recordings (Female acoustic variety)
     "SAVEE": True,      # ~480 recordings   (British English dialect)
-    "MELD": True,       # ~13,700 recordings (Natural conversational dialogue from Friends)
-    "ESD": False,       # Set to True if local folder or access available
-    "EMOV_DB": False,   # Optional: set True if local folder available
+    "MELD": True,       # ~13,708 recordings (Natural conversational dialogue from Friends)
+    "ESD": True,        # ~29,000 recordings (Expressive multi-speaker speech via Kaggle)
+    "EMOV_DB": True,    # ~7,000 recordings (Expressive speech via OpenSLR 115)
     "IEMOCAP": False,   # Optional: set True if local folder available
 }
 
@@ -172,8 +172,7 @@ KAGGLE_DATASETS = {
     "CREMA-D": "ejlok1/cremad",
     "TESS": "ejlok1/toronto-emotional-speech-set-tess",
     "SAVEE": "ejlok1/surrey-audiovisual-expressed-emotion-savee",
-    "MELD": "thedevastator/extracted-audio-meld-traindev",
-    "ESD": "prajwal321/emotional-speech-database-esd",
+    "ESD": "nguyenthanhlim/emotional-speech-dataset-esd",
 }
 
 KAGGLE_USERNAME = os.environ.get("KAGGLE_USERNAME", "")
@@ -258,6 +257,46 @@ def download_meld_direct(target_dir):
     print(f"✓ MELD ready! Total {total_wavs} audio files available.")
     return target_dir
 
+def download_emov_direct(target_dir):
+    target_dir = Path(target_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    wav_count = len(list(target_dir.rglob("*.wav")))
+    if wav_count >= 1000:
+        print(f"✓ EmoV-DB audio already present ({wav_count} .wav files found)")
+        return target_dir
+
+    print("Downloading EmoV-DB directly from OpenSLR 115 mirror (Zero-Auth / Public mirror)...")
+    import urllib.request
+    import tarfile
+
+    emov_files = [
+        "bea_Amused.tar.gz", "bea_Angry.tar.gz", "bea_Disgust.tar.gz", "bea_Neutral.tar.gz",
+        "jenie_Amused.tar.gz", "jenie_Angry.tar.gz", "jenie_Disgust.tar.gz", "jenie_Neutral.tar.gz",
+        "josh_Amused.tar.gz", "josh_Angry.tar.gz", "josh_Disgust.tar.gz", "josh_Neutral.tar.gz",
+        "sam_Amused.tar.gz", "sam_Angry.tar.gz", "sam_Disgust.tar.gz", "sam_Neutral.tar.gz"
+    ]
+    base_url = "https://www.openslr.org/resources/115/"
+
+    for fname in emov_files:
+        tar_dst = target_dir / fname
+        flag_file = target_dir / f".{fname}.done"
+        if not flag_file.exists():
+            url = base_url + fname
+            print(f"  Downloading EmoV-DB partition: {fname}...")
+            try:
+                urllib.request.urlretrieve(url, tar_dst)
+                with tarfile.open(tar_dst, "r:gz") as tar:
+                    tar.extractall(path=target_dir)
+                flag_file.touch()
+                if tar_dst.exists():
+                    tar_dst.unlink()
+            except Exception as e:
+                print(f"  ⚠ Failed partition {fname}: {e}")
+
+    total_wavs = len(list(target_dir.rglob("*.wav")))
+    print(f"✓ EmoV-DB ready! Total {total_wavs} audio files available.")
+    return target_dir
+
 DATA_PATHS = {}
 for name, enabled in DATASET_CONFIG.items():
     if not enabled:
@@ -271,7 +310,7 @@ for name, enabled in DATASET_CONFIG.items():
         print(f"✓ Found local dataset: {name} at {found_local}")
         continue
 
-    # 2. MELD direct download (no 403 error)
+    # 2. MELD direct download from HuggingFace
     if name == "MELD":
         try:
             m_path = download_meld_direct(DATA_DIR / "MELD")
@@ -281,7 +320,17 @@ for name, enabled in DATASET_CONFIG.items():
         except Exception as e:
             print(f"⚠ MELD direct download failed: {e}")
 
-    # 3. Try Kaggle download for other datasets
+    # 3. EmoV-DB direct download from OpenSLR 115
+    if name == "EMOV_DB":
+        try:
+            em_path = download_emov_direct(DATA_DIR / "EMOV_DB")
+            DATA_PATHS["EMOV_DB"] = em_path
+            print("✓ EmoV-DB ready")
+            continue
+        except Exception as e:
+            print(f"⚠ EmoV-DB direct download failed: {e}")
+
+    # 4. Try Kaggle download for remaining datasets (RAVDESS, CREMA-D, TESS, SAVEE, ESD)
     if name in KAGGLE_DATASETS:
         print(f"Downloading {name} via KaggleHub ({KAGGLE_DATASETS[name]})...")
         try:
