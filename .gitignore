@@ -1,0 +1,28 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyTorch checkpoints and large binaries (>100MB cannot be pushed to GitHub)
+*.pt
+*.bin
+*.safetensors
+*.pth
+*.onnx
+
+# Data & feature caches
+datasets/
+features/
+models/
+SIGNALWELL_VOICE/
+
+# Environments & IDEs
+.env
+.venv
+env/
+venv/
+.idea/
+.vscode/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
