@@ -30,6 +30,23 @@ The model was evaluated using a strict speaker-independent split (speakers in th
 | Test UAR (Unweighted Average Recall) | 67.49% |
 | Validation Macro F1 | 66.06% |
 
+## Supported Datasets
+
+The pipeline supports both clean acted speech and spontaneous conversational speech:
+
+| Dataset | Type | Recordings | Role |
+|---|---|---|---|
+| **RAVDESS** | Acted studio | 1,440 | Clean emotional baseline |
+| **CREMA-D** | Acted multi-speaker | 7,442 | Speaker demographic & ethnicity diversity |
+| **TESS** | Acted female | 2,800 | High-pitch emotion clarity |
+| **SAVEE** | Acted British | 480 | Dialectal variation |
+| **MELD** | Conversational | ~13,700 | Spontaneous dialogue from Friends TV series |
+| **ESD** | Expressive speech | ~29,000 | Multi-speaker acoustic dynamics (English & Mandarin) |
+| **EmoV-DB** | Expressive | ~7,000 | Vocal nuances (amusement, sleepiness, anger) |
+| **IEMOCAP** | Dyadic conversational | ~10,000 | Academic gold-standard benchmark |
+
+You can toggle which datasets to include directly via `DATASET_CONFIG` in the script. Extracted features are automatically cached to disk (or your Google Drive in Colab) so you never lose feature extraction progress if a session restarts.
+
 ## Files in this Directory
 
 - `SIGNALWELL_VOICE_PIPELINE.py`: Full standalone script that handles dataset downloading (via KaggleHub), feature extraction, training with early stopping, evaluation metrics, and single-file prediction.

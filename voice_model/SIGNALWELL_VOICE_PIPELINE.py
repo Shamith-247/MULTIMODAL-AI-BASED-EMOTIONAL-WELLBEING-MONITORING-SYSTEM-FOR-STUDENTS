@@ -14,19 +14,20 @@
 
 
 # ======================================================================
-# 1. INSTALL DEPENDENCIES & RUNTIME GUARD
+# 1. RUNTIME & DEPENDENCY CHECK
 # ======================================================================
 
-!pip -q install kagglehub transformers accelerate librosa soundfile
+import sys
+import subprocess
 
-try:
-    import numpy as np
-    from sklearn.model_selection import GroupShuffleSplit
-except (AttributeError, ImportError) as e:
-    if "ufunc" in str(e) or "numpy" in str(e).lower():
-        import os
-        print("\nRestarting session to apply clean C-extensions... Please click RUN once more!")
-        os.kill(os.getpid(), 9)
+def ensure_installed(package):
+    try:
+        __import__(package)
+    except ImportError:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", package])
+
+for pkg in ["transformers", "accelerate", "librosa", "soundfile", "kagglehub"]:
+    ensure_installed(pkg)
 
 
 # ======================================================================
@@ -102,14 +103,27 @@ if DEVICE == "cuda":
 
 
 # ======================================================================
-# 4. DIRECTORIES
+# 4. DIRECTORIES & PERSISTENT CACHING
 # ======================================================================
 
-ROOT = Path("/content/SIGNALWELL_VOICE")
-
+ROOT = Path("/content/SIGNALWELL_VOICE") if Path("/content").exists() else Path("./SIGNALWELL_VOICE")
 DATA_DIR = ROOT / "datasets"
 FEATURE_DIR = ROOT / "features"
 MODEL_DIR = ROOT / "models"
+
+# Optional Google Drive storage (caches features permanently so Colab disconnects never lose progress)
+try:
+    if Path("/content").exists():
+        from google.colab import drive
+        drive_mount = Path("/content/drive")
+        if not (drive_mount / "MyDrive").exists():
+            drive.mount("/content/drive")
+        DRIVE_ROOT = drive_mount / "MyDrive" / "SIGNALWELL_VOICE"
+        FEATURE_DIR = DRIVE_ROOT / "features"
+        MODEL_DIR = DRIVE_ROOT / "models"
+        print(f"✓ Connected to Google Drive! Persistent cache active at:\n  {DRIVE_ROOT}")
+except Exception:
+    pass
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 FEATURE_DIR.mkdir(parents=True, exist_ok=True)
@@ -138,8 +152,29 @@ WEIGHT_DECAY = 1e-4
 
 
 # ======================================================================
-# 6. KAGGLE AUTHENTICATION & DATASET DOWNLOAD
+# 6. DATASET REGISTRY & DOWNLOAD (KAGGLE & LOCAL)
 # ======================================================================
+
+# Toggle datasets to include (Acted + Conversational + Multi-speaker)
+DATASET_CONFIG = {
+    "RAVDESS": True,    # ~1,440 recordings (Clean acted studio speech)
+    "CREMA-D": True,    # ~7,442 recordings (Multi-speaker diverse acted)
+    "TESS": True,       # ~2,800 recordings (Female acoustic variety)
+    "SAVEE": True,      # ~480 recordings   (British English dialect)
+    "MELD": True,       # ~13,700 recordings (Natural conversational dialogue from Friends)
+    "ESD": True,        # ~29,000 recordings (Expressive multi-speaker speech)
+    "EMOV_DB": False,   # Optional: set True if local folder available
+    "IEMOCAP": False,   # Optional: set True if local folder available
+}
+
+KAGGLE_DATASETS = {
+    "RAVDESS": "uwrfkaggler/ravdess-emotional-speech-audio",
+    "CREMA-D": "ejlok1/cremad",
+    "TESS": "ejlok1/toronto-emotional-speech-set-tess",
+    "SAVEE": "ejlok1/surrey-audiovisual-expressed-emotion-savee",
+    "MELD": "thedevastator/extracted-audio-meld-traindev",
+    "ESD": "prajwal321/emotional-speech-database-esd",
+}
 
 KAGGLE_USERNAME = os.environ.get("KAGGLE_USERNAME", "")
 KAGGLE_KEY = os.environ.get("KAGGLE_KEY", "")
@@ -177,29 +212,35 @@ except Exception:
 
 import kagglehub
 
-KAGGLE_DATASETS = {
-    "RAVDESS": "uwrfkaggler/ravdess-emotional-speech-audio",
-    "CREMA-D": "ejlok1/cremad",
-    "TESS": "ejlok1/toronto-emotional-speech-set-tess",
-    "SAVEE": "ejlok1/surrey-audiovisual-expressed-emotion-savee"
-}
-
 DATA_PATHS = {}
-for name, dataset_id in KAGGLE_DATASETS.items():
-    print(f"Downloading {name}...")
-    try:
-        path = kagglehub.dataset_download(dataset_id)
-        DATA_PATHS[name] = Path(path)
-        print("✓", name, "ready")
-    except Exception as e:
-        print("✗", name, "failed:", e)
+for name, enabled in DATASET_CONFIG.items():
+    if not enabled:
+        continue
+    
+    # 1. Check local directory first
+    local_candidates = [DATA_DIR / name, ROOT / name, Path.cwd() / "datasets" / name]
+    found_local = next((c for c in local_candidates if c.exists() and len(list(c.rglob("*.wav"))) > 0), None)
+    if found_local:
+        DATA_PATHS[name] = found_local
+        print(f"✓ Found local dataset: {name} at {found_local}")
+        continue
+
+    # 2. Try Kaggle download
+    if name in KAGGLE_DATASETS:
+        print(f"Downloading {name} via KaggleHub ({KAGGLE_DATASETS[name]})...")
+        try:
+            path = kagglehub.dataset_download(KAGGLE_DATASETS[name])
+            DATA_PATHS[name] = Path(path)
+            print("✓", name, "ready")
+        except Exception as e:
+            print(f"⚠ {name} download failed or skipped: {e}")
 
 if not DATA_PATHS:
-    raise RuntimeError("No datasets downloaded. Check Kaggle credentials.")
+    raise RuntimeError("No datasets available. Please verify credentials or local folders.")
 
 
 # ======================================================================
-# 7. PARSE DATASETS
+# 7. PARSE DATASETS & NORMALIZE EMOTIONS
 # ======================================================================
 
 RAVDESS_EMOTION = {"01": "neutral", "03": "happy", "04": "sad", "05": "angry", "06": "fear", "07": "disgust", "08": "surprise"}
@@ -210,6 +251,21 @@ TESS_EMOTION = {
     "ps": "surprise", "pleasant_surprised": "surprise", "pleasant_surprise": "surprise"
 }
 SAVEE_EMOTION = {"a": "angry", "d": "disgust", "f": "fear", "h": "happy", "n": "neutral", "sa": "sad", "su": "surprise"}
+MELD_EMOTION = {
+    "anger": "angry", "disgust": "disgust", "fear": "fear", "joy": "happy",
+    "neutral": "neutral", "sadness": "sad", "surprise": "surprise"
+}
+ESD_EMOTION = {
+    "neutral": "neutral", "happy": "happy", "sad": "sad",
+    "angry": "angry", "surprise": "surprise"
+}
+EMOV_EMOTION = {
+    "anger": "angry", "disgust": "disgust", "amused": "happy", "neutral": "neutral"
+}
+IEMOCAP_EMOTION = {
+    "ang": "angry", "hap": "happy", "exc": "happy", "sad": "sad",
+    "neu": "neutral", "fea": "fear", "dis": "disgust", "sur": "surprise"
+}
 
 records = []
 def add_record(dataset, filepath, speaker, emotion):
@@ -224,7 +280,7 @@ def add_record(dataset, filepath, speaker, emotion):
     })
 
 def find_audio_files(root_path):
-    return [p for p in root_path.rglob("*") if p.suffix.lower() == ".wav"]
+    return [p for p in root_path.rglob("*") if p.suffix.lower() in [".wav", ".flac"]]
 
 if "RAVDESS" in DATA_PATHS:
     for fp in find_audio_files(DATA_PATHS["RAVDESS"]):
@@ -266,8 +322,89 @@ if "SAVEE" in DATA_PATHS:
         if code in SAVEE_EMOTION:
             add_record("SAVEE", fp, spk, SAVEE_EMOTION[code])
 
+if "MELD" in DATA_PATHS:
+    meld_root = DATA_PATHS["MELD"]
+    meld_lookup = {}
+    csv_files = list(meld_root.rglob("*_sent_emo.csv")) + list(meld_root.rglob("*meld*.csv"))
+    for cf in csv_files:
+        try:
+            m_df = pd.read_csv(cf)
+            if "Dialogue_ID" in m_df.columns and "Utterance_ID" in m_df.columns and "Emotion" in m_df.columns:
+                for _, r in m_df.iterrows():
+                    key = f"dia{r['Dialogue_ID']}_utt{r['Utterance_ID']}".lower()
+                    spk = str(r.get("Speaker", "unknown")).strip()
+                    emo = str(r["Emotion"]).strip().lower()
+                    if emo in MELD_EMOTION:
+                        meld_lookup[key] = (spk, MELD_EMOTION[emo])
+        except Exception:
+            pass
+    for fp in find_audio_files(meld_root):
+        stem = fp.stem.lower()
+        if stem in meld_lookup:
+            spk, em = meld_lookup[stem]
+            add_record("MELD", fp, spk, em)
+        else:
+            for k, v in MELD_EMOTION.items():
+                if k in stem or k in fp.parent.name.lower():
+                    add_record("MELD", fp, fp.parent.name, v)
+                    break
+
+if "ESD" in DATA_PATHS:
+    esd_root = DATA_PATHS["ESD"]
+    for fp in find_audio_files(esd_root):
+        parent_parts = [p.lower() for p in fp.parts]
+        stem = fp.stem.lower()
+        em = None
+        for k, v in ESD_EMOTION.items():
+            if k in parent_parts or k in stem:
+                em = v
+                break
+        if em:
+            spk = "spk"
+            for part in fp.parts:
+                if re.match(r"^\d{4}$", part) or "speaker" in part.lower():
+                    spk = part
+                    break
+            add_record("ESD", fp, spk, em)
+
+if "EMOV_DB" in DATA_PATHS:
+    emov_root = DATA_PATHS["EMOV_DB"]
+    for fp in find_audio_files(emov_root):
+        parts = [p.lower() for p in fp.parts]
+        stem = fp.stem.lower()
+        em = None
+        for k, v in EMOV_EMOTION.items():
+            if k in parts or k in stem:
+                em = v
+                break
+        if em:
+            spk = next((s for s in ["bea", "jenie", "josh", "sam"] if s in parts), "unknown")
+            add_record("EMOV_DB", fp, spk, em)
+
+if "IEMOCAP" in DATA_PATHS:
+    iemocap_root = DATA_PATHS["IEMOCAP"]
+    for fp in find_audio_files(iemocap_root):
+        parts = [p.lower() for p in fp.parts]
+        stem = fp.stem.lower()
+        em = None
+        for k, v in IEMOCAP_EMOTION.items():
+            if k in parts or k in stem:
+                em = v
+                break
+        if em:
+            spk_match = re.match(r"(ses\d{2}[fm])", stem)
+            spk = spk_match.group(1).upper() if spk_match else fp.parent.name
+            add_record("IEMOCAP", fp, spk, em)
+
 df = pd.DataFrame(records).drop_duplicates(subset=["filepath"]).reset_index(drop=True)
-print(f"Total recordings: {len(df)} across {df['speaker_id'].nunique()} speakers.")
+print(f"\nTotal recordings indexed: {len(df)} across {df['speaker_id'].nunique()} unique speakers.")
+print("-" * 50)
+print("Dataset Breakdown:")
+print(df["dataset"].value_counts())
+print("-" * 50)
+print("Emotion Breakdown:")
+print(df["emotion"].value_counts())
+print("-" * 50)
 
 
 # ======================================================================
@@ -640,22 +777,35 @@ def predict_single_file(audio_path):
         bar = "█" * int(prob * 25)
         print(f"  {emotion:<10} : {prob*100:5.1f}%  {bar}")
 
-# Find audio files in /content
-target_wavs = [p for p in Path("/content").glob("*.wav") if not str(p).startswith("/content/SIGNALWELL_VOICE")]
+# Find test audio files
+try:
+    from google.colab import files
+    in_colab = True
+except ImportError:
+    in_colab = False
 
-if not target_wavs:
+search_dir = Path("/content") if in_colab else Path.cwd()
+target_wavs = [p for p in search_dir.glob("*.wav") if "SIGNALWELL_VOICE" not in str(p)]
+
+if not target_wavs and in_colab:
     print("\nNo user .wav files found in /content.")
     print("Please select your .wav files from your computer:")
-    uploaded = files.upload()
-    target_wavs = [Path(f) for f in uploaded.keys()]
+    try:
+        uploaded = files.upload()
+        target_wavs = [Path(f) for f in uploaded.keys()]
+    except Exception:
+        pass
 
 for wav_path in target_wavs:
     predict_single_file(wav_path)
 
 print("\n" + "=" * 75)
-print("ALL COMPLETE! DOWNLOADING MODEL TO YOUR PC...")
+print("ALL COMPLETE! Best model checkpoint saved at:")
+print(f"  {BEST_MODEL}")
 print("=" * 75)
-try:
-    files.download(str(BEST_MODEL))
-except Exception:
-    print(f"Model saved at: {BEST_MODEL}")
+
+if in_colab:
+    try:
+        files.download(str(BEST_MODEL))
+    except Exception:
+        pass
