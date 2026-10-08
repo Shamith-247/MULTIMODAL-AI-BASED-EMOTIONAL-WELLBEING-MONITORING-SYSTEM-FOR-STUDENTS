@@ -162,7 +162,7 @@ DATASET_CONFIG = {
     "TESS": True,       # ~2,800 recordings (Female acoustic variety)
     "SAVEE": True,      # ~480 recordings   (British English dialect)
     "MELD": True,       # ~13,700 recordings (Natural conversational dialogue from Friends)
-    "ESD": True,        # ~29,000 recordings (Expressive multi-speaker speech)
+    "ESD": False,       # Set to True if local folder or access available
     "EMOV_DB": False,   # Optional: set True if local folder available
     "IEMOCAP": False,   # Optional: set True if local folder available
 }
@@ -212,6 +212,52 @@ except Exception:
 
 import kagglehub
 
+def download_meld_direct(target_dir):
+    target_dir = Path(target_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    wav_count = len(list(target_dir.rglob("*.wav")))
+    if wav_count >= 1000:
+        print(f"✓ MELD audio already extracted ({wav_count} .wav files found)")
+        return target_dir
+
+    print("Downloading MELD dataset directly from HuggingFace mirror (Zero-Auth / No 403 errors)...")
+    import urllib.request
+    import tarfile
+
+    csv_urls = {
+        "train.csv": "https://huggingface.co/datasets/ajyy/MELD_audio/resolve/main/train.csv",
+        "dev.csv": "https://huggingface.co/datasets/ajyy/MELD_audio/resolve/main/dev.csv",
+        "test.csv": "https://huggingface.co/datasets/ajyy/MELD_audio/resolve/main/test.csv"
+    }
+    archive_urls = {
+        "dev.tar.gz": "https://huggingface.co/datasets/ajyy/MELD_audio/resolve/main/archive/dev.tar.gz",
+        "test.tar.gz": "https://huggingface.co/datasets/ajyy/MELD_audio/resolve/main/archive/test.tar.gz",
+        "train.tar.gz": "https://huggingface.co/datasets/ajyy/MELD_audio/resolve/main/archive/train.tar.gz"
+    }
+
+    for fname, url in csv_urls.items():
+        dst = target_dir / fname
+        if not dst.exists():
+            print(f"  Downloading metadata: {fname}...")
+            urllib.request.urlretrieve(url, dst)
+
+    for aname, url in archive_urls.items():
+        tar_dst = target_dir / aname
+        flag_file = target_dir / f".{aname}.done"
+        if not flag_file.exists():
+            print(f"  Downloading audio archive: {aname}...")
+            urllib.request.urlretrieve(url, tar_dst)
+            print(f"  Extracting {aname}...")
+            with tarfile.open(tar_dst, "r:gz") as tar:
+                tar.extractall(path=target_dir)
+            flag_file.touch()
+            if tar_dst.exists():
+                tar_dst.unlink()
+
+    total_wavs = len(list(target_dir.rglob("*.wav")))
+    print(f"✓ MELD ready! Total {total_wavs} audio files available.")
+    return target_dir
+
 DATA_PATHS = {}
 for name, enabled in DATASET_CONFIG.items():
     if not enabled:
@@ -225,7 +271,17 @@ for name, enabled in DATASET_CONFIG.items():
         print(f"✓ Found local dataset: {name} at {found_local}")
         continue
 
-    # 2. Try Kaggle download
+    # 2. MELD direct download (no 403 error)
+    if name == "MELD":
+        try:
+            m_path = download_meld_direct(DATA_DIR / "MELD")
+            DATA_PATHS["MELD"] = m_path
+            print("✓ MELD ready")
+            continue
+        except Exception as e:
+            print(f"⚠ MELD direct download failed: {e}")
+
+    # 3. Try Kaggle download for other datasets
     if name in KAGGLE_DATASETS:
         print(f"Downloading {name} via KaggleHub ({KAGGLE_DATASETS[name]})...")
         try:
@@ -325,7 +381,7 @@ if "SAVEE" in DATA_PATHS:
 if "MELD" in DATA_PATHS:
     meld_root = DATA_PATHS["MELD"]
     meld_lookup = {}
-    csv_files = list(meld_root.rglob("*_sent_emo.csv")) + list(meld_root.rglob("*meld*.csv"))
+    csv_files = list(meld_root.glob("*.csv")) + list(meld_root.rglob("*_sent_emo.csv")) + list(meld_root.rglob("*meld*.csv"))
     for cf in csv_files:
         try:
             m_df = pd.read_csv(cf)
