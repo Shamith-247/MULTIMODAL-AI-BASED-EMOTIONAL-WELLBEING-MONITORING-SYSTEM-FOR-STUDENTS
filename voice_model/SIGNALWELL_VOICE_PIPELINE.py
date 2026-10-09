@@ -103,17 +103,26 @@ if DEVICE == "cuda":
 
 
 # ======================================================================
-# 4. DIRECTORIES & PERSISTENT CACHING
+# 4. DIRECTORIES & ENVIRONMENT AUTO-DETECTION
 # ======================================================================
 
-ROOT = Path("/content/SIGNALWELL_VOICE") if Path("/content").exists() else Path("./SIGNALWELL_VOICE")
-DATA_DIR = ROOT / "datasets"
-FEATURE_DIR = ROOT / "features"
-MODEL_DIR = ROOT / "models"
+IS_KAGGLE = Path("/kaggle").exists()
+IS_COLAB = Path("/content").exists()
 
-# Optional Google Drive storage (caches features permanently so Colab disconnects never lose progress)
-try:
-    if Path("/content").exists():
+if IS_KAGGLE:
+    ROOT = Path("/kaggle/working/SIGNALWELL_VOICE")
+    DATA_DIR = ROOT / "datasets"
+    FEATURE_DIR = ROOT / "features"
+    MODEL_DIR = ROOT / "models"
+    print("✓ Running on Kaggle Notebook environment!")
+elif IS_COLAB:
+    ROOT = Path("/content/SIGNALWELL_VOICE")
+    DATA_DIR = ROOT / "datasets"
+    FEATURE_DIR = ROOT / "features"
+    MODEL_DIR = ROOT / "models"
+    print("✓ Running on Google Colab environment!")
+    # Optional Google Drive storage
+    try:
         from google.colab import drive
         drive_mount = Path("/content/drive")
         if not (drive_mount / "MyDrive").exists():
@@ -122,8 +131,14 @@ try:
         FEATURE_DIR = DRIVE_ROOT / "features"
         MODEL_DIR = DRIVE_ROOT / "models"
         print(f"✓ Connected to Google Drive! Persistent cache active at:\n  {DRIVE_ROOT}")
-except Exception:
-    pass
+    except Exception:
+        pass
+else:
+    ROOT = Path("./SIGNALWELL_VOICE")
+    DATA_DIR = ROOT / "datasets"
+    FEATURE_DIR = ROOT / "features"
+    MODEL_DIR = ROOT / "models"
+    print("✓ Running in local / standalone Python environment!")
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 FEATURE_DIR.mkdir(parents=True, exist_ok=True)
@@ -188,26 +203,29 @@ if kaggle_json.exists():
     except Exception:
         pass
 
-if not KAGGLE_USERNAME:
-    KAGGLE_USERNAME = input("Enter Kaggle username: ").strip()
+if not IS_KAGGLE:
+    if not KAGGLE_USERNAME:
+        KAGGLE_USERNAME = input("Enter Kaggle username: ").strip()
 
-if not KAGGLE_KEY:
-    KAGGLE_KEY = getpass("Enter Kaggle API key: ").strip()
+    if not KAGGLE_KEY:
+        KAGGLE_KEY = getpass("Enter Kaggle API key: ").strip()
 
-if not KAGGLE_USERNAME or not KAGGLE_KEY:
-    raise RuntimeError("Kaggle credentials missing.")
+    if not KAGGLE_USERNAME or not KAGGLE_KEY:
+        raise RuntimeError("Kaggle credentials missing.")
 
-os.environ["KAGGLE_USERNAME"] = KAGGLE_USERNAME
-os.environ["KAGGLE_KEY"] = KAGGLE_KEY
+    os.environ["KAGGLE_USERNAME"] = KAGGLE_USERNAME
+    os.environ["KAGGLE_KEY"] = KAGGLE_KEY
 
-try:
-    k_dir = Path.home() / ".kaggle"
-    k_dir.mkdir(parents=True, exist_ok=True)
-    with open(k_dir / "kaggle.json", "w") as f:
-        json.dump({"username": KAGGLE_USERNAME, "key": KAGGLE_KEY}, f)
-    os.chmod(k_dir / "kaggle.json", 0o600)
-except Exception:
-    pass
+    try:
+        k_dir = Path.home() / ".kaggle"
+        k_dir.mkdir(parents=True, exist_ok=True)
+        with open(k_dir / "kaggle.json", "w") as f:
+            json.dump({"username": KAGGLE_USERNAME, "key": KAGGLE_KEY}, f)
+        os.chmod(k_dir / "kaggle.json", 0o600)
+    except Exception:
+        pass
+else:
+    print("✓ Running inside Kaggle — using native Kaggle environment authentication.")
 
 import kagglehub
 
@@ -302,12 +320,17 @@ for name, enabled in DATASET_CONFIG.items():
     if not enabled:
         continue
     
-    # 1. Check local directory first
+    # 1. Check local directory or Kaggle input
     local_candidates = [DATA_DIR / name, ROOT / name, Path.cwd() / "datasets" / name]
+    if IS_KAGGLE and Path("/kaggle/input").exists():
+        for p in Path("/kaggle/input").glob("*"):
+            if name.lower().replace("-", "") in p.name.lower().replace("-", ""):
+                local_candidates.insert(0, p)
+
     found_local = next((c for c in local_candidates if c.exists() and len(list(c.rglob("*.wav"))) > 0), None)
     if found_local:
         DATA_PATHS[name] = found_local
-        print(f"✓ Found local dataset: {name} at {found_local}")
+        print(f"✓ Found dataset: {name} at {found_local}")
         continue
 
     # 2. MELD direct download from HuggingFace
@@ -914,3 +937,6 @@ if in_colab:
         files.download(str(BEST_MODEL))
     except Exception:
         pass
+elif IS_KAGGLE:
+    print(f"\n✓ Kaggle Notebook output ready! You can download your trained model directly")
+    print(f"  from the 'Output' tab on the right sidebar: {BEST_MODEL.name}")

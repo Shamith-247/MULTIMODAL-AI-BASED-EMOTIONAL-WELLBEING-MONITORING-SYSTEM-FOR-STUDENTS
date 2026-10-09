@@ -49,17 +49,26 @@ You can toggle which datasets to include directly via `DATASET_CONFIG` in the sc
 
 ## Files in this Directory
 
-- `SIGNALWELL_VOICE_PIPELINE.py`: Full standalone script that handles dataset downloading (via KaggleHub), feature extraction, training with early stopping, evaluation metrics, and single-file prediction.
-- `SIGNALWELL_VOICE_COLAB.ipynb`: A self-contained Google Colab notebook configured to train or run inference on a free T4 GPU without manual environment setup.
+- `SIGNALWELL_VOICE_PIPELINE.py`: Full standalone script that handles dataset downloading, feature extraction, training with early stopping, evaluation metrics, and single-file prediction.
+- `SIGNALWELL_VOICE_KAGGLE.ipynb`: Master notebook configured for Kaggle Free GPU (T4 x 2, 30 hrs/week) with native Kaggle dataset access.
+- `SIGNALWELL_VOICE_COLAB.ipynb`: Self-contained Google Colab notebook with Google Drive caching.
 - `requirements.txt`: Python packages needed to run the code.
 - `sample_1.wav`, `sample_2.wav`, `sample_3.wav`: Test audio samples to quickly verify inference.
 
 ## Getting Started
 
-### Option 1: Google Colab (Recommended)
+### Option 1: Kaggle Free GPU (Recommended — 30 Hours Free / Week)
+1. Go to [kaggle.com/code](https://www.kaggle.com/code) and click **New Notebook**.
+2. In the right sidebar under **Notebook Options**:
+   - **Accelerator**: select **GPU T4 x 2** (or P100).
+   - **Internet**: toggle **ON**.
+3. Click **File -> Import Notebook** and select `SIGNALWELL_VOICE_KAGGLE.ipynb`.
+4. Click **Run All**!
+
+### Option 2: Google Colab
 Upload `SIGNALWELL_VOICE_COLAB.ipynb` to Google Colab, enable GPU runtime (`Runtime -> Change runtime type -> T4 GPU`), and run the cells.
 
-### Option 2: Running Locally
+### Option 3: Running Locally
 
 Clone the repository and install dependencies:
 
