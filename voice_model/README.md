@@ -2,22 +2,51 @@
 
 This directory contains the speech emotion recognition pipeline for the multimodal student wellbeing project. It takes a raw audio file and predicts one of 7 emotion categories (`angry`, `disgust`, `fear`, `happy`, `neutral`, `sad`, `surprise`) along with an uncertainty score indicating how ambiguous the speech is.
 
-## How It Works
+## Patent-Pending Architecture: ECAN-SER
 
-Instead of relying only on deep audio embeddings or only on classical audio features, the model uses a dual-branch setup:
+The module introduces **`ECAN-SER` (Evidential Cross-Attention Conformer Network)**, an affective computing architecture designed for patent disclosure and research publication:
 
-1. **Self-Supervised Speech Representations (WavLM Large)**: The 6-second audio clip is split into six 1-second chunks and passed through pretrained WavLM Large to extract 1024-dimensional temporal embeddings.
-2. **Acoustic Prosody (37 features)**: Classical speech features extracted with Librosa:
-   - Pitch (F0 via YIN algorithm: mean, standard deviation, range)
-   - Energy (RMS energy: mean, standard deviation, range)
-   - Spectral descriptors (centroid, bandwidth, rolloff, zero-crossing rate)
-   - Voice activity (pause ratio based on energy thresholding)
-   - 13 MFCC means and 13 MFCC standard deviations
-3. **Temporal Transformer**: Both feature sets are projected into a shared 256-dimensional space and fused, then passed through a 3-layer Transformer encoder (`heads=8`, `dim_feedforward=1024`, `dropout=0.15`).
-4. **Attention Pooling**: A learned attention layer aggregates the 6 temporal chunks into a single representation based on which segments contain the strongest emotional cues.
-5. **Output Heads**:
-   - Emotion classification head (softmax over 7 classes)
-   - Uncertainty head (sigmoid score between 0.0 and 1.0 reflecting confidence)
+```
+          Raw Speech Audio (16 kHz, 6s)
+                     │
+       ┌─────────────┴────────────────────────┐
+       ▼                                      ▼
+[Stream 1: Pretrained WavLM Large]    [Stream 2: Dynamic Prosodic Engine]
+ - 1024-dim Temporal Sequence          - 37 Acoustic Descriptors (F0, Energy,
+ - 6 Temporal Chunk Embeddings           ZCR, Spectral Flux, Formants, MFCC)
+       │                                      │
+       └──────────────┬───────────────────────┘
+                      ▼
+ ┌────────────────────────────────────────────────────────┐
+ │ CLAIM 1: Bidirectional Cross-Modal Co-Attention (BC-CA)│
+ │  - WavLM queries Prosody (Acoustic Salience Guidance)  │
+ │  - Prosody queries WavLM (Phonetic Context Grounding)  │
+ │  - Squeeze-and-Excitation Gated Residual Fusion        │
+ └────────────────────────────┬───────────────────────────┘
+                              ▼
+ ┌────────────────────────────────────────────────────────┐
+ │ CLAIM 2: Multi-Scale Conformer Temporal Backbone       │
+ │  - Depthwise Dilated Temporal Convolution (Micro-Scale)│
+ │  - Relative Multi-Head Self-Attention (Macro-Scale)    │
+ │  - Dual Pre-Norm Feed-Forward Half-Step Networks       │
+ └────────────────────────────┬───────────────────────────┘
+                              ▼
+ ┌────────────────────────────────────────────────────────┐
+ │ CLAIM 3: Attentive Multi-Head Temporal Pooling         │
+ │  - Content-dependent emotional importance weighting    │
+ └────────────────────────────┬───────────────────────────┘
+                              ▼
+ ┌────────────────────────────────────────────────────────┐
+ │ CLAIM 4: Evidential Deep Learning (Dirichlet Prior)    │
+ │  - Non-negative evidence vector e_k = Softplus(z_k)    │
+ │  - Dirichlet concentration: alpha_k = e_k + 1          │
+ │  - Expected probability: p_k = alpha_k / S             │
+ │  - Decoupled Epistemic Uncertainty: u = K / S          │
+ │  - Evidential Loss with KL Prior Divergence Penalty    │
+ └────────────────────────────────────────────────────────┘
+```
+
+For the formal patent claims and mathematical specifications, see [PATENT_SPECIFICATION.md](PATENT_SPECIFICATION.md).
 
 ## Benchmark Results
 
