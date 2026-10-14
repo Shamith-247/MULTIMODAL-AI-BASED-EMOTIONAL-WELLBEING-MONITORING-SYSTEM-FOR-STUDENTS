@@ -16,6 +16,7 @@ This folder maintains an authoritative, end-to-end record of all architectural d
 | **[`04_TEXT_SITUATIONAL_PIPELINE.md`](./04_TEXT_SITUATIONAL_PIPELINE.md)** | **Context-Aware Situational Discourse Engine**<br>Why single-word keyword models fail, Transformers.js 404 recovery, negation scope tracking, contrastive pivot weighting, third-party attribution filters, and student situational archetypes. |
 | **[`05_DEPLOYMENT_AND_TESTING_GUIDE.md`](./05_DEPLOYMENT_AND_TESTING_GUIDE.md)** | **Testing, Verification & Runbook**<br>Step-by-step instructions for running the live interactive dashboard, standalone webcam and text testers, desktop OpenCV apps, and Colab GPU scripts. |
 | **[`06_FACIAL_EMOTION_AUDIT_REPORT.md`](./06_FACIAL_EMOTION_AUDIT_REPORT.md)** | **Technical Audit & Architectural Review**<br>Comprehensive 10-point audit of InceptionResnetV1, MTCNN dropout, neutral bias saturation, preprocessing divergence, and open-source model alternatives. |
+| **[`07_REALTIME_SAMPLE_EVALUATION_REPORT.md`](./07_REALTIME_SAMPLE_EVALUATION_REPORT.md)** | **Real-Time Sample Data Evaluation**<br>Empirical evaluation across authentic user webcam test photos, Action Unit analysis, raw vs. calibrated comparisons, and confusion diagnostics. |
 
 ---
 

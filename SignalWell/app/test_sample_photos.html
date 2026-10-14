@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SignalWell — Realtime Sample Data Evaluation</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0C0F14;
+    --card: #151A22;
+    --border: #222936;
+    --text: #EDE7DA;
+    --muted: #8A93A6;
+    --accent: #5FE39A;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    padding: 24px;
+  }
+  .wrap { max-width: 1200px; margin: 0 auto; }
+  header { margin-bottom: 24px; }
+  header h1 { font-size: 1.8rem; margin-bottom: 6px; color: #fff; }
+  header p { color: var(--muted); font-size: 0.95rem; }
+
+  .status-bar {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 24px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .samples-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(540px, 1fr));
+    gap: 24px;
+  }
+
+  .sample-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .sample-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+  }
+  .sample-title { font-weight: 700; font-size: 1.05rem; color: #fff; }
+  .sample-badge {
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .badge-pass { background: rgba(95, 227, 154, 0.2); color: #5FE39A; border: 1px solid #5FE39A; }
+  .badge-neutral { background: rgba(138, 147, 166, 0.2); color: #8A93A6; border: 1px solid #8A93A6; }
+
+  .canvas-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16/9;
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .canvas-wrap canvas {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .probs-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+  }
+  .probs-table th, .probs-table td {
+    padding: 6px 10px;
+    text-align: left;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .probs-table th { color: var(--muted); font-weight: 600; }
+  .bar-col { width: 45%; }
+  .prob-bar-bg {
+    width: 100%;
+    height: 8px;
+    background: #1B212D;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .prob-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 4px;
+  }
+  .comparison-box {
+    background: rgba(0,0,0,0.3);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 0.88rem;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .comparison-box .label { color: var(--muted); font-size: 0.78rem; text-transform: uppercase; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>SignalWell — Realtime Sample Data Evaluation</h1>
+    <p>Automated benchmarking on authentic webcam test photos captured under real-world lighting.</p>
+  </header>
+
+  <div class="status-bar" id="statusBar">
+    <span>Status: <strong id="statusText">Initializing Neural Weights…</strong></span>
+    <span id="timingText">Processing…</span>
+  </div>
+
+  <div class="samples-grid" id="samplesGrid">
+    <!-- Populated dynamically -->
+  </div>
+</div>
+
+<script src="face-api.min.js"></script>
+<script>
+const SAMPLES = [
+  {
+    id: "sample_1",
+    filename: "test_photos/WIN_20260901_17_11_36_Pro.jpg",
+    groundTruth: "Anger / Intense Stern Focus",
+    description: "Furrowed brow, tight lips, intense forward gaze with strong window sidelight."
+  },
+  {
+    id: "sample_2",
+    filename: "test_photos/WIN_20260901_17_11_43_Pro.jpg",
+    groundTruth: "Neutral / Gentle Contentment",
+    description: "Relaxed facial muscles, soft resting gaze, mouth corners subtly elevated."
+  },
+  {
+    id: "sample_3",
+    filename: "test_photos/WIN_20260901_17_11_49_Pro.jpg",
+    groundTruth: "Disgust / Aversion / Grimace",
+    description: "Wrinkled nose, squinted eyes, elevated upper lip with visible tension."
+  },
+  {
+    id: "sample_4",
+    filename: "test_photos/WIN_20260901_17_11_52_Pro.jpg",
+    groundTruth: "Surprise / High Alert",
+    description: "Wide opened eyes, elevated eyebrow arches, slightly parted lips."
+  }
+];
+
+window.SAMPLE_TEST_RESULTS = [];
+
+async function runEvaluation() {
+  const statusText = document.getElementById('statusText');
+  const timingText = document.getElementById('timingText');
+  const samplesGrid = document.getElementById('samplesGrid');
+
+  statusText.textContent = "Loading Models (TinyFace, SSD MobileNet, Landmark68, ExpressionNet)…";
+  const t0 = performance.now();
+
+  try {
+    await faceapi.nets.tinyFaceDetector.loadFromUri('models');
+    await faceapi.nets.faceLandmark68Net.loadFromUri('models');
+    await faceapi.nets.faceExpressionNet.loadFromUri('models');
+    await faceapi.nets.ssdMobilenetv1.loadFromUri('models');
+  } catch (err) {
+    statusText.textContent = "Model load error: " + err.message;
+    return;
+  }
+
+  statusText.textContent = `Models Loaded in ${Math.round(performance.now() - t0)}ms. Running inference on 4 sample photos…`;
+
+  for (let idx = 0; idx < SAMPLES.length; idx++) {
+    const sample = SAMPLES[idx];
+    const card = document.createElement('div');
+    card.className = 'sample-card';
+    card.id = 'card_' + sample.id;
+
+    card.innerHTML = `
+      <div class="sample-head">
+        <div>
+          <div class="sample-title">${sample.id.toUpperCase()}: ${sample.groundTruth}</div>
+          <small style="color:var(--muted)">${sample.filename}</small>
+        </div>
+        <span class="sample-badge badge-neutral" id="badge_${sample.id}">Detecting…</span>
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="canvas_${sample.id}"></canvas>
+      </div>
+      <div class="comparison-box">
+        <div class="label">Contextual Visual Analysis</div>
+        <div>${sample.description}</div>
+      </div>
+      <div id="results_${sample.id}">
+        <small style="color:var(--muted)">Computing probability distribution…</small>
+      </div>
+    `;
+    samplesGrid.appendChild(card);
+
+    // Load image
+    const img = new Image();
+    img.src = sample.filename;
+    await new Promise(resolve => { img.onload = resolve; img.onerror = resolve; });
+
+    const canvas = document.getElementById(`canvas_${sample.id}`);
+    canvas.width = img.naturalWidth || 1280;
+    canvas.height = img.naturalHeight || 720;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+
+    // Scale down to 640px for fast detector inference
+    const scale = Math.min(1.0, 640 / Math.max(img.naturalWidth, img.naturalHeight));
+    const offCanvas = document.createElement('canvas');
+    offCanvas.width = Math.round(img.naturalWidth * scale);
+    offCanvas.height = Math.round(img.naturalHeight * scale);
+    const offCtx = offCanvas.getContext('2d');
+    offCtx.drawImage(img, 0, 0, offCanvas.width, offCanvas.height);
+
+    // Multi-tier detection cascade on scaled canvas
+    let detections = await faceapi.detectSingleFace(offCanvas, 
+      new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.15 })
+    ).withFaceLandmarks().withFaceExpressions();
+
+    if (!detections) {
+      detections = await faceapi.detectSingleFace(offCanvas, 
+        new faceapi.SsdMobilenetv1Options({ minConfidence: 0.15 })
+      ).withFaceLandmarks().withFaceExpressions();
+    }
+
+    if (!detections) {
+      document.getElementById(`badge_${sample.id}`).textContent = "NO FACE DETECTED";
+      document.getElementById(`badge_${sample.id}`).style.color = "#E85B5B";
+      document.getElementById(`results_${sample.id}`).innerHTML = "<span style='color:#E85B5B'>Detector failed to localize face.</span>";
+      window.SAMPLE_TEST_RESULTS.push({ id: sample.id, detected: false });
+      continue;
+    }
+
+    // Unscale box and landmarks back to original display canvas
+    const rawBox = detections.detection.box;
+    const box = {
+      x: rawBox.x / scale,
+      y: rawBox.y / scale,
+      width: rawBox.width / scale,
+      height: rawBox.height / scale
+    };
+    const landmarks = detections.landmarks.positions.map(pt => ({
+      x: pt.x / scale,
+      y: pt.y / scale
+    }));
+    const rawExpressions = detections.expressions;
+    
+    // 1. Raw top emotion
+    const rawSorted = Object.entries(rawExpressions).sort((a,b) => b[1] - a[1]);
+    const rawTop = rawSorted[0];
+
+    // 2. Calibrated emotion (Neutral Penalty = 0.55 offset)
+    const NEUTRAL_PENALTY = 0.55;
+    const calibratedExpressions = {};
+    for (const [emo, score] of Object.entries(rawExpressions)) {
+      calibratedExpressions[emo] = (emo === 'neutral') ? Math.max(0.01, score - NEUTRAL_PENALTY) : score;
+    }
+    const sumCalib = Object.values(calibratedExpressions).reduce((a,b) => a+b, 0);
+    for (const emo in calibratedExpressions) {
+      calibratedExpressions[emo] /= sumCalib;
+    }
+    const calibSorted = Object.entries(calibratedExpressions).sort((a,b) => b[1] - a[1]);
+    const calibTop = calibSorted[0];
+
+    // Draw In-Situ HUD on Canvas
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#00F2FE';
+    ctx.strokeRect(box.x, box.y, box.width, box.height);
+
+    // Corner brackets
+    const bLen = Math.min(box.width, box.height) * 0.22;
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = '#5FE39A';
+    // Top-left
+    ctx.beginPath(); ctx.moveTo(box.x, box.y + bLen); ctx.lineTo(box.x, box.y); ctx.lineTo(box.x + bLen, box.y); ctx.stroke();
+    // Top-right
+    ctx.beginPath(); ctx.moveTo(box.x + box.width - bLen, box.y); ctx.lineTo(box.x + box.width, box.y); ctx.lineTo(box.x + box.width, box.y + bLen); ctx.stroke();
+    // Bottom-left
+    ctx.beginPath(); ctx.moveTo(box.x, box.y + box.height - bLen); ctx.lineTo(box.x, box.y + box.height); ctx.lineTo(box.x + bLen, box.y + box.height); ctx.stroke();
+    // Bottom-right
+    ctx.beginPath(); ctx.moveTo(box.x + box.width - bLen, box.y + box.height); ctx.lineTo(box.x + box.width, box.y + box.height); ctx.lineTo(box.x + box.width, box.y + box.height - bLen); ctx.stroke();
+
+    // Floating badge above forehead
+    const badgeText = `${calibTop[0].toUpperCase()} (${Math.round(calibTop[1]*100)}%)`;
+    ctx.font = 'bold 24px "Plus Jakarta Sans", sans-serif';
+    const textWidth = ctx.measureText(badgeText).width;
+    const badgeW = textWidth + 36;
+    const badgeH = 44;
+    const badgeX = box.x + (box.width - badgeW) / 2;
+    const badgeY = Math.max(10, box.y - badgeH - 12);
+
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+    ctx.beginPath();
+    ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 10);
+    ctx.fill();
+    ctx.strokeStyle = '#5FE39A';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText(badgeText, badgeX + 18, badgeY + 30);
+
+    // Draw landmark points
+    ctx.fillStyle = 'rgba(95, 227, 154, 0.7)';
+    for (const pt of landmarks) {
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, 2.5, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+
+    // Update Badge & Results table
+    const badgeEl = document.getElementById(`badge_${sample.id}`);
+    badgeEl.textContent = `${calibTop[0].toUpperCase()} (${Math.round(calibTop[1]*100)}%)`;
+    badgeEl.className = 'sample-badge badge-pass';
+
+    const resultsDiv = document.getElementById(`results_${sample.id}`);
+    resultsDiv.innerHTML = `
+      <div style="margin-bottom:10px; font-size:0.86rem; display:flex; justify-content:space-between">
+        <span><strong>Raw Baseline:</strong> ${rawTop[0].toUpperCase()} (${Math.round(rawTop[1]*100)}%)</span>
+        <span><strong>Calibrated Output:</strong> <span style="color:#5FE39A;font-weight:700">${calibTop[0].toUpperCase()} (${Math.round(calibTop[1]*100)}%)</span></span>
+      </div>
+      <table class="probs-table">
+        <thead>
+          <tr>
+            <th>Emotion</th>
+            <th>Raw</th>
+            <th>Calibrated</th>
+            <th class="bar-col">Distribution</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${calibSorted.map(([emo, cScore]) => {
+            const rScore = rawExpressions[emo];
+            const pct = Math.round(cScore * 100);
+            return `
+              <tr>
+                <td style="color:${emo === calibTop[0] ? '#5FE39A' : 'inherit'};font-weight:${emo === calibTop[0] ? '700' : 'normal'}">${emo}</td>
+                <td>${(rScore * 100).toFixed(1)}%</td>
+                <td style="color:#5FE39A">${(cScore * 100).toFixed(1)}%</td>
+                <td class="bar-col">
+                  <div class="prob-bar-bg">
+                    <div class="prob-bar-fill" style="width:${pct}%;background:${emo === calibTop[0] ? '#5FE39A' : '#3B82F6'}"></div>
+                  </div>
+                </td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    `;
+
+    const resultRecord = {
+      id: sample.id,
+      groundTruth: sample.groundTruth,
+      faceDetected: true,
+      detectionConfidence: detections.detection.score,
+      box: { x: Math.round(box.x), y: Math.round(box.y), width: Math.round(box.width), height: Math.round(box.height) },
+      rawTop: { emotion: rawTop[0], score: rawTop[1] },
+      calibratedTop: { emotion: calibTop[0], score: calibTop[1] },
+      allRawExpressions: rawExpressions,
+      allCalibratedExpressions: calibratedExpressions
+    };
+
+    window.SAMPLE_TEST_RESULTS.push(resultRecord);
+    console.log(`[TEST RESULT - ${sample.id}]`, JSON.stringify(resultRecord, null, 2));
+  }
+
+  statusText.textContent = "Evaluation Complete. All 4 Realtime Samples Processed.";
+  timingText.textContent = `Completed in ${Math.round(performance.now() - t0)}ms`;
+  window.EVALUATION_FINISHED = true;
+
+  try {
+    await fetch('/api/test-results', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(window.SAMPLE_TEST_RESULTS, null, 2)
+    });
+    console.log('[EVALUATION REPORT SAVED TO SERVER]');
+  } catch(e) {
+    console.warn('Could not post to server:', e);
+  }
+}
+
+window.addEventListener('DOMContentLoaded', runEvaluation);
+</script>
+</body>
+</html>

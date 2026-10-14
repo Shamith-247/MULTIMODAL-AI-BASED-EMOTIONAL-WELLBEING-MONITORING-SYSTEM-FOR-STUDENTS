@@ -177,3 +177,4 @@ flowchart TD
    to eliminate frame-to-frame visual flickering.
 5. **Calibrated Temperature & Neutral Logit Scaling**:
    Dampen the over-represented neutral class dynamically based on lighting and landmark motion variance.
+

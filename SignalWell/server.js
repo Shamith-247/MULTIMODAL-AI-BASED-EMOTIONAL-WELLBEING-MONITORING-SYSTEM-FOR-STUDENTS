@@ -28,6 +28,25 @@ const MIME_TYPES = {
 };
 
 const server = http.createServer((req, res) => {
+  // Handle POST endpoint for automated evaluation reporting
+  if (req.method === 'POST' && req.url === '/api/test-results') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const outPath = path.join(BASE_DIR, 'sample_evaluation_results.json');
+        fs.writeFileSync(outPath, body, 'utf8');
+        console.log('\n[EVALUATION REPORT RECEIVED] Successfully written to:', outPath);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok', writtenTo: outPath }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
   let reqPath = decodeURI(req.url.split('?')[0]);
   if (reqPath === '/' || reqPath === '') reqPath = '/index.html';
 

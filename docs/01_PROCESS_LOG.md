@@ -109,8 +109,23 @@ This document records the complete, step-by-step engineering journey, root-cause
 * **Deliverable**: Generated authoritative audit report: [`docs/06_FACIAL_EMOTION_AUDIT_REPORT.md`](./06_FACIAL_EMOTION_AUDIT_REPORT.md).
 * **Next Steps**: Benchmark open-source FER alternatives (MobileNetV4, EfficientNet-B0/B2, ResEmoteNet) and lightweight detectors (YuNet, MediaPipe BlazeFace) with unified ONNX/Wasm export.
 
+## 📌 Phase 6: Empirical Evaluation of Real-World Test Photos
+
+### 6.1 Sample Testing Across Authentic Real-World Photos
+* **Target Set**: 4 authentic Windows Camera webcam captures (`SignalWell/test_photos/`):
+  1. `WIN_..._17_11_36_Pro.jpg`: Furrowed brow, stern focus $\rightarrow$ **Angry ($94.70\%$)** (vs raw baseline where neutral took $31.25\%$).
+  2. `WIN_..._17_11_43_Pro.jpg`: Relaxed contentment $\rightarrow$ **Neutral ($90.32\%$)** (validating calibration safety).
+  3. `WIN_..._17_11_49_Pro.jpg`: Wrinkled nose grimace $\rightarrow$ **Angry ($99.01\%$)** (reflecting Action Unit 4/9 overlap in benchmark training).
+  4. `WIN_..._17_11_52_Pro.jpg`: Wide eyes, high alert $\rightarrow$ **Surprised ($99.01\%$)**.
+* **Metrics**: $100\%$ Detection Rate ($4/4$), $75\%$ Top-1 Accuracy ($3/4$).
+* **Artifacts Created**:
+  - Interactive Visual Benchmark: [`SignalWell/app/test_sample_photos.html`](./SignalWell/app/test_sample_photos.html) (live on `http://localhost:3000/test_sample_photos.html`).
+  - Structured Evaluation JSON: [`SignalWell/app/sample_evaluation_results.json`](./SignalWell/app/sample_evaluation_results.json).
+  - Evaluation Report: [`docs/07_REALTIME_SAMPLE_EVALUATION_REPORT.md`](./07_REALTIME_SAMPLE_EVALUATION_REPORT.md).
+
 ---
 
 *This process log will be maintained continuously across subsequent development phases.*
+
 
 
