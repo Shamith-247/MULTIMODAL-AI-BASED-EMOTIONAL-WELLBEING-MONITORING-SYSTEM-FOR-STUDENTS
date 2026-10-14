@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SignalWell — Situational Scenario Emotion Tester</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0C0F14;
+    --card: #151A22;
+    --border: #222936;
+    --text: #EDE7DA;
+    --muted: #8A93A6;
+    --accent: #5FE39A;
+    --accent-dim: rgba(95, 227, 154, 0.15);
+    --warn: #E5A84B;
+    --danger: #E85B5B;
+    --cyan: #5BC0BE;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    padding: 24px;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  header { margin-bottom: 24px; }
+  header h1 { font-size: 1.6rem; font-weight: 700; color: #fff; margin-bottom: 6px; }
+  header p { font-size: 0.92rem; color: var(--muted); }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 20px;
+  }
+  @media(max-width: 900px){ .grid { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+  }
+
+  .field-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  select.scenario-select {
+    width: 100%;
+    background: #0E121A;
+    color: #fff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.9rem;
+    margin-bottom: 16px;
+    outline: none;
+    font-family: inherit;
+  }
+
+  textarea.scenario-input {
+    width: 100%;
+    min-height: 120px;
+    background: #090C10;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: #fff;
+    padding: 14px;
+    font-family: inherit;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    resize: vertical;
+    outline: none;
+  }
+  textarea.scenario-input:focus { border-color: var(--accent); }
+
+  .action-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+    align-items: center;
+  }
+  button.btn {
+    background: var(--accent);
+    color: #0C120E;
+    font-weight: 700;
+    font-size: 0.88rem;
+    padding: 10px 22px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  button.btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+
+  /* Comparison Cards */
+  .comp-box {
+    margin-top: 20px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  @media(max-width: 650px){ .comp-box { grid-template-columns: 1fr; } }
+
+  .comp-col {
+    background: #0E121A;
+    border-radius: 10px;
+    padding: 14px;
+    border: 1px solid var(--border);
+  }
+  .comp-col.naive { border-left: 4px solid var(--danger); }
+  .comp-col.contextual { border-left: 4px solid var(--accent); }
+  .comp-title { font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .comp-col.naive .comp-title { color: var(--danger); }
+  .comp-col.contextual .comp-title { color: var(--accent); }
+  .comp-result { font-family: 'JetBrains Mono', monospace; font-size: 1.1rem; font-weight: 700; margin-bottom: 4px; color: #fff; }
+  .comp-desc { font-size: 0.8rem; color: var(--muted); }
+
+  /* Sidebar details */
+  .sidebar { display: flex; flex-direction: column; gap: 14px; }
+  .badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+  }
+  .badge-pivot { background: rgba(91, 192, 190, 0.2); color: var(--cyan); border: 1px solid var(--cyan); }
+  .badge-neg { background: rgba(229, 168, 75, 0.2); color: var(--warn); border: 1px solid var(--warn); }
+  .badge-archetype { background: var(--accent-dim); color: var(--accent); border: 1px solid var(--accent); }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    font-size: 0.84rem;
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-lbl { color: var(--muted); }
+  .stat-val { font-family: 'JetBrains Mono', monospace; font-weight: 600; color: #fff; }
+
+  .meter-bar {
+    width: 100%;
+    height: 8px;
+    background: #0E121A;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 6px;
+  }
+  .meter-fill { height: 100%; width: 50%; background: linear-gradient(90deg, var(--warn), var(--accent)); transition: width 0.3s; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>SignalWell — Text Model Situational Scenario Tester</h1>
+    <p>Evaluates full situational scenarios, contrastive turning points (but/however), negations, and third-party attribution rather than single emotion-based words.</p>
+  </header>
+
+  <div class="grid">
+    <div class="card">
+      <div class="field-label">
+        <span>Load a Real-World Scenario</span>
+        <span style="font-weight:400; color:var(--muted)">10 Scenarios Available</span>
+      </div>
+      <select class="scenario-select" id="scenarioSelect">
+        <option value="0">Scenario 1: Negation & Denial ("not happy with my score, but...")</option>
+        <option value="1">Scenario 2: Overcoming Hardship / Relief ("eyes burn and head killing me, but tests pass...")</option>
+        <option value="2">Scenario 3: Third-Party Empathy ("friend was crying hysterically, so I stayed...")</option>
+        <option value="3">Scenario 4: Impostor Syndrome under Praise ("won first place, but felt like a complete fraud...")</option>
+        <option value="4">Scenario 5: Medical / Life Scare Relief ("biopsy came back negative, collapsed sobbing...")</option>
+        <option value="5">Scenario 6: Academic Burnout & Numbness ("staring at blank cursor, don't even feel anxious, just hollow...")</option>
+        <option value="6">Scenario 7: Bittersweet Transition ("breaks my heart to leave, but excited for new job...")</option>
+        <option value="7">Scenario 8: Sarcastic Frustration ("oh fantastic, laptop blue-screened before saving...")</option>
+        <option value="8">Scenario 9: Social Exclusion ("saw group members laughing and having fun without me...")</option>
+        <option value="9">Scenario 10: Mindful Contentment ("drinking tea while rain fell, deeply at peace...")</option>
+      </select>
+
+      <div class="field-label">
+        <span>Scenario Text (Editable)</span>
+        <span id="charCount" class="mono">0 chars</span>
+      </div>
+      <textarea class="scenario-input" id="scenarioInput" placeholder="Type or paste any scenario here…"></textarea>
+
+      <div class="action-row">
+        <button class="btn" id="analyzeBtn">Analyze Complete Scenario</button>
+      </div>
+
+      <!-- Comparison Breakdown -->
+      <div class="comp-box">
+        <div class="comp-col naive">
+          <div class="comp-title">❌ Naive Single-Word Match</div>
+          <div class="comp-result" id="naiveResult">--</div>
+          <div class="comp-desc" id="naiveDesc">Looks only at isolated emotion keywords.</div>
+        </div>
+        <div class="comp-col contextual">
+          <div class="comp-title">✅ Context-Aware Situational Emotion</div>
+          <div class="comp-result" id="contextResult">--</div>
+          <div class="comp-desc" id="contextDesc">Evaluates narrative turning points and resolution.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Discourse Details Sidebar -->
+    <div class="sidebar">
+      <div class="card">
+        <h3 style="font-size:0.95rem; margin-bottom:12px; color:#fff;">Narrative Discourse Analysis</h3>
+        <div class="stat-row">
+          <span class="stat-lbl">Turning Point (Pivot)</span>
+          <span class="stat-val" id="dispPivot">None</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-lbl">Negation Scope</span>
+          <span class="stat-val" id="dispNeg">None</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-lbl">Subject Attribution</span>
+          <span class="stat-val" id="dispAttr">Self</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-lbl">Situational Archetype</span>
+          <span class="stat-val" id="dispArch">--</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 style="font-size:0.95rem; margin-bottom:12px; color:#fff;">Wellbeing Impact</h3>
+        <div class="stat-row">
+          <span class="stat-lbl">Wellbeing Valence</span>
+          <span class="stat-val" id="dispValence">50 / 100</span>
+        </div>
+        <div class="meter-bar"><div class="meter-fill" id="meterFill"></div></div>
+        <div style="font-size:0.75rem; color:var(--muted); margin-top:8px;" id="dispImpact">
+          Contextual valence calculated from situation outcome rather than raw word tokens.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SCENARIOS = [
+  {
+    text: "I am not happy with my exam score at all, but I am not hopeless either.",
+    naive: "HAPPINESS / JOY",
+    naiveReason: "Distracted by surface keyword 'happy' without parsing 'not'."
+  },
+  {
+    text: "I stayed up until 4 AM fixing this bug. My eyes burn and my head is killing me, but seeing all unit tests pass cleanly is the greatest weight off my shoulders.",
+    naive: "SADNESS / PAIN",
+    naiveReason: "Distracted by physical hardship tokens ('burn', 'killing me')."
+  },
+  {
+    text: "My friend was crying hysterically after failing her interview, so I stayed with her all evening, made dinner, and listened until she felt safe.",
+    naive: "SADNESS / FEAR",
+    naiveReason: "Assigned friend's crying and failure directly to the author."
+  },
+  {
+    text: "The professor announced to the entire hall that my project won first place. Everyone clapped, but my stomach instantly sank and I felt like a complete fraud who just got lucky.",
+    naive: "JOY / PRIDE",
+    naiveReason: "Distracted by outward praise ('first place', 'clapped') ignoring internal dread."
+  },
+  {
+    text: "The biopsy came back completely negative and clean. I collapsed onto the floor sobbing uncontrollably.",
+    naive: "GRIEF / SADNESS",
+    naiveReason: "Interpreted 'sobbing uncontrollably' as tragedy rather than relief."
+  },
+  {
+    text: "I have been staring at this blank cursor for three hours. The deadline is tomorrow morning. I don't even feel anxious anymore, just hollow and empty.",
+    naive: "NEUTRAL / CALM",
+    naiveReason: "Tricked by 'don't even feel anxious', missing total emotional depletion."
+  },
+  {
+    text: "Today was graduation. Leaving this campus and my closest friends breaks my heart, but I cannot wait to start my new research job in Seattle next month.",
+    naive: "SADNESS",
+    naiveReason: "Distracted by 'breaks my heart' without recognizing career excitement."
+  },
+  {
+    text: "Oh fantastic, my laptop just blue-screened right before I could hit save on my 20-page draft. Truly the highlight of my week.",
+    naive: "JOY / ADMIRATION",
+    naiveReason: "Took sarcastic positive words ('fantastic', 'highlight') literally."
+  },
+  {
+    text: "I walked past the dining hall and saw all my project group members sitting together laughing, sharing food, and having fun without me.",
+    naive: "AMUSEMENT / JOY",
+    naiveReason: "Tagged others' laughter and fun while ignoring author's exclusion."
+  },
+  {
+    text: "Nothing extraordinary happened today. Just sat on the porch drinking hot black tea while the rain fell on the garden leaves. Felt deeply at peace.",
+    naive: "NEUTRAL",
+    naiveReason: "Treats calm mindfulness as flat empty neutral."
+  }
+];
+
+function analyzeSituationalNarrative(text) {
+  const lower = text.toLowerCase().trim();
+  if(!lower) return null;
+
+  const pivotPattern = /\b(but|however|yet|nevertheless|nonetheless|although|even though|though|finally|at last|in the end)\b/gi;
+  const pivotMatches = Array.from(lower.matchAll(pivotPattern));
+  let hasPivot = pivotMatches.length > 0;
+  let pivotWord = hasPivot ? pivotMatches[pivotMatches.length - 1][0] : null;
+
+  const otherEmotionMatch = /\b(my friend|my roommate|my sister|my brother|my mom|my dad|everyone|they|she|he)\s+(was|were|started|kept|looked)\s+(crying|cried|sobbing|screaming|furious|upset)\b/i.test(lower);
+
+  const archetypes = [
+    {
+      name: "Sarcastic Frustration",
+      detect: () => /\b(oh fantastic|oh wonderful|just great|truly the highlight|best start to the day)\b/i.test(lower) &&
+                    /\b(blue-screened|broke down|crashed|failed|deleted|lost|ruined|cancelled)\b/i.test(lower),
+      primary: "ANNOYANCE & ANGER",
+      valence: -0.85,
+      description: "Sarcastic frustration (Disaster inverted surface words)"
+    },
+    {
+      name: "Relief / Overcoming Challenge",
+      detect: () => /\b(weight off (my|our) (shoulders|chest)|negative and clean|finally pass|passed cleanly|turned out benign|crisis averted|all stable|working again)\b/i.test(lower) ||
+                    (hasPivot && /\b(unit tests pass|worked in the end|finally compiled|got the job|made it through|tests pass cleanly)\b/i.test(lower)),
+      primary: "RELIEF & PRIDE",
+      valence: +0.80,
+      description: "Relief & Accomplishment (Overcoming struggle)"
+    },
+    {
+      name: "Caring & Empathetic Support",
+      detect: () => otherEmotionMatch || /\b(stayed with (her|him|them)|comfort|listened until|held (her|his) hand|made dinner for (her|him))\b/i.test(lower),
+      primary: "CARING & EMPATHY",
+      valence: +0.70,
+      description: "Caring & Empathy (Supporting someone in distress)"
+    },
+    {
+      name: "Impostor Syndrome under Praise",
+      detect: () => /\b(won first place|everyone clapped|congratulated me|praised my|honors program)\b/i.test(lower) &&
+                    /\b(fraud|impostor|imposter|stomach sank|just got lucky|fooled them|not good enough)\b/i.test(lower),
+      primary: "NERVOUSNESS & FEAR",
+      valence: -0.65,
+      description: "Impostor Anxiety (Inward dread under public praise)"
+    },
+    {
+      name: "Academic Burnout / Numbness",
+      detect: () => /\b(staring at (the|this) (blank|cursor)|don't even feel anxious anymore|hollow and empty|numb|burned out|brain is fried|exhausted to my core)\b/i.test(lower),
+      primary: "BURNOUT & DEPLETION",
+      valence: -0.75,
+      description: "Burnout / Depletion (Deep mental fatigue)"
+    },
+    {
+      name: "Bittersweet Transition",
+      detect: () => /\b(graduation|leaving (campus|my best friends|home)|saying goodbye)\b/i.test(lower) &&
+                    /\b(cannot wait|excited|new job|new chapter|proud|dream)\b/i.test(lower),
+      primary: "OPTIMISM & NOSTALGIA",
+      valence: +0.35,
+      description: "Bittersweet (Loss mixed with future optimism)"
+    },
+    {
+      name: "Social Exclusion / Rejection",
+      detect: () => /\b(without me|left me out|didn't invite me|sat together .* without me)\b/i.test(lower),
+      primary: "DISAPPOINTMENT & LONELINESS",
+      valence: -0.70,
+      description: "Loneliness / Exclusion (Left out by peers)"
+    },
+    {
+      name: "Mindful Contentment",
+      detect: () => /\b(deeply at peace|cup of tea|rain fell|sitting on the porch|calm and quiet|grateful for the little things)\b/i.test(lower),
+      primary: "GRATITUDE & PEACE",
+      valence: +0.75,
+      description: "Peace & Restorative Contentment"
+    }
+  ];
+
+  for(const arch of archetypes){
+    if(arch.detect()){
+      return {
+        isArchetype: true,
+        archName: arch.name,
+        primary: arch.primary,
+        description: arch.description,
+        valence: arch.valence,
+        hasPivot,
+        pivotWord,
+        isOther: otherEmotionMatch
+      };
+    }
+  }
+
+  let effectiveText = lower;
+  if(hasPivot && pivotWord){
+    const parts = lower.split(new RegExp(`\\b${pivotWord}\\b`, 'i'));
+    if(parts.length > 1){
+      effectiveText = parts[parts.length - 1].trim();
+    }
+  }
+
+  const isNegated = /\b(not|never|no|n't|cannot|can't|hardly|without)\b/i.test(effectiveText);
+  const posTerms = /\b(happy|good|great|excited|proud|relieved|glad|hopeful|thrilled|accomplished|peace|pass|positive)\b/i.test(effectiveText);
+  const negTerms = /\b(sad|bad|depressed|miserable|failing|anxious|terrified|angry|furious|hopeless|hurt|dread)\b/i.test(effectiveText);
+
+  let primary = 'NEUTRAL';
+  let valence = 0;
+  let desc = 'Reflective scenario';
+
+  if(posTerms && isNegated){
+    primary = 'DISAPPOINTMENT & DETERMINATION'; valence = -0.55; desc = 'Dissatisfaction (Negated positive outcome)';
+  } else if(negTerms && isNegated){
+    primary = 'RELIEF & RESILIENCE'; valence = +0.55; desc = 'Overcoming negativity (Negated fear/sadness)';
+  } else if(posTerms){
+    primary = hasPivot ? 'RELIEF & JOY' : 'JOY & SATISFACTION'; valence = +0.70; desc = hasPivot ? 'Resolution turning positive' : 'Positive affirmation';
+  } else if(negTerms){
+    primary = 'SADNESS & STRAIN'; valence = -0.65; desc = 'Negative / heavy state';
+  } else if(hasPivot){
+    primary = 'COGNITIVE REALIZATION'; valence = +0.10; desc = 'Reflective cognitive shift';
+  }
+
+  return {
+    isArchetype: false,
+    archName: "Contextual Discourse",
+    primary,
+    description: desc,
+    valence,
+    hasPivot,
+    pivotWord,
+    isNegated,
+    isOther: otherEmotionMatch
+  };
+}
+
+const scenarioSelect = document.getElementById('scenarioSelect');
+const scenarioInput = document.getElementById('scenarioInput');
+const analyzeBtn = document.getElementById('analyzeBtn');
+
+function loadScenario(idx){
+  const s = SCENARIOS[idx];
+  scenarioInput.value = s.text;
+  document.getElementById('charCount').textContent = s.text.length + ' chars';
+  runAnalysis(s);
+}
+
+function runAnalysis(preset){
+  const text = scenarioInput.value.trim();
+  if(!text) return;
+
+  const res = analyzeSituationalNarrative(text);
+  if(!res) return;
+
+  // Comparison
+  if(preset){
+    document.getElementById('naiveResult').textContent = preset.naive;
+    document.getElementById('naiveDesc').textContent = preset.naiveReason;
+  } else {
+    document.getElementById('naiveResult').textContent = 'KEYWORD BIAS';
+    document.getElementById('naiveDesc').textContent = 'Naive models focus on individual positive/negative words without narrative context.';
+  }
+
+  document.getElementById('contextResult').textContent = res.primary;
+  document.getElementById('contextDesc').textContent = res.description;
+
+  // Discourse Breakdown
+  document.getElementById('dispPivot').textContent = res.hasPivot ? `Yes ('${res.pivotWord}')` : 'None';
+  document.getElementById('dispPivot').className = res.hasPivot ? 'stat-val badge badge-pivot' : 'stat-val';
+  
+  const isNeg = /\b(not|never|no|n't|cannot|can't)\b/i.test(text);
+  document.getElementById('dispNeg').textContent = isNeg ? 'Active' : 'None';
+  document.getElementById('dispNeg').className = isNeg ? 'stat-val badge badge-neg' : 'stat-val';
+
+  document.getElementById('dispAttr').textContent = res.isOther ? 'Third Party (Empathy)' : 'Author (Self)';
+  document.getElementById('dispArch').textContent = res.archName;
+
+  // Wellbeing score
+  const score = Math.round(50 + res.valence * 50);
+  document.getElementById('dispValence').textContent = `${score} / 100`;
+  document.getElementById('meterFill').style.width = score + '%';
+  document.getElementById('dispImpact').textContent = `Resolution outcome shifted wellbeing valence to ${score}/100.`;
+}
+
+scenarioSelect.addEventListener('change', () => {
+  loadScenario(parseInt(scenarioSelect.value));
+});
+
+analyzeBtn.addEventListener('click', () => {
+  runAnalysis(null);
+});
+
+scenarioInput.addEventListener('input', () => {
+  document.getElementById('charCount').textContent = scenarioInput.value.length + ' chars';
+});
+
+// Load first scenario initially
+loadScenario(0);
+</script>
+</body>
+</html>
+

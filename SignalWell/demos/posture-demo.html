@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Posture Signal — Test Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#10131A; --fog:#1B2029; --hair:#2A303B;
+    --bone:#EDE7DA; --bone-dim:#A9A296;
+    --moss:#8FA377; --moss-dim:#5F7050;
+    --rust:#B85450; --amber:#D98B4A;
+    --mist:#C7CCD6; --mist-dim:#6E7482;
+    --shadow:0 20px 60px rgba(0,0,0,.4);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--ink); color:var(--bone);
+    font-family:'Plus Jakarta Sans',sans-serif; line-height:1.5;
+    -webkit-font-smoothing:antialiased; padding:32px 20px 80px;
+  }
+  h1,h2,h3{font-family:'Space Grotesk',sans-serif; font-weight:600; margin:0 0 .3em 0; letter-spacing:-0.01em;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+  .wrap{max-width:1040px; margin:0 auto;}
+  header{margin-bottom:28px;}
+  header h1{font-size:1.7rem;}
+  header p{color:var(--mist); max-width:640px; font-size:.95rem;}
+  .badge{
+    display:inline-block; font-family:'JetBrains Mono',monospace; font-size:.72rem;
+    color:var(--moss); border:1px solid var(--moss-dim); border-radius:20px;
+    padding:3px 10px; margin-bottom:14px;
+  }
+  .grid{display:grid; grid-template-columns:1fr 340px; gap:20px;}
+  @media (max-width:860px){ .grid{grid-template-columns:1fr;} }
+
+  .panel{
+    background:var(--fog); border:1px solid var(--hair); border-radius:16px;
+    padding:20px; box-shadow:var(--shadow);
+  }
+  .video-wrap{position:relative; border-radius:12px; overflow:hidden; background:#000; aspect-ratio:4/3;}
+  .video-wrap video{display:none;}
+  .video-wrap canvas{width:100%; height:100%; display:block;}
+  .video-overlay-msg{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    text-align:center; padding:24px; color:var(--mist-dim); font-size:.9rem;
+  }
+
+  .controls{display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;}
+  .btn{
+    background:var(--moss); color:#0F1310; border:none; border-radius:10px;
+    padding:10px 18px; font-family:'Plus Jakarta Sans',sans-serif; font-weight:600;
+    font-size:.86rem; cursor:pointer;
+  }
+  .btn.ghost{background:transparent; color:var(--mist); border:1px solid var(--hair);}
+  .btn:disabled{opacity:.4; cursor:not-allowed;}
+  .status-line{margin-top:10px; font-size:.82rem; color:var(--mist-dim); min-height:1.2em;}
+
+  .score-big{font-family:'Space Grotesk',sans-serif; font-size:3.4rem; font-weight:700; line-height:1;}
+  .score-tag{
+    display:inline-block; margin-top:6px; padding:4px 12px; border-radius:20px;
+    font-size:.78rem; font-family:'JetBrains Mono',monospace;
+  }
+  .tag-open{background:rgba(143,163,119,.15); color:var(--moss);}
+  .tag-neutral{background:rgba(199,204,214,.12); color:var(--mist);}
+  .tag-closed{background:rgba(184,84,80,.15); color:var(--rust);}
+
+  .metric-row{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:9px 0; border-bottom:1px solid var(--hair); font-size:.84rem;
+  }
+  .metric-row:last-child{border-bottom:none;}
+  .metric-row .label{color:var(--mist);}
+  .metric-row .val{font-family:'JetBrains Mono',monospace; color:var(--bone);}
+  .metric-track{width:100%; height:5px; background:var(--ink); border-radius:4px; margin-top:6px; overflow:hidden;}
+  .metric-fill{height:100%; background:var(--moss); width:0%; transition:width .25s ease;}
+
+  .spark-canvas{width:100%; height:60px; display:block; margin-top:14px;}
+  .note{
+    font-size:.78rem; color:var(--mist-dim); margin-top:16px; padding-top:14px;
+    border-top:1px solid var(--hair); line-height:1.55;
+  }
+  .note strong{color:var(--mist);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="badge">standalone test — not wired into the app yet</div>
+    <h1>Posture openness signal</h1>
+    <p>Testing whether a simple geometric heuristic on MediaPipe body-pose landmarks — shoulder width, arm openness, head/shoulder drop — can produce a usable "openness" score, matching the pattern this review paper described: expansive posture reads positive, diminutive/contracted posture reads negative. No training involved; every number below is computed directly from your live pose keypoints.</p>
+  </header>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="video-wrap" id="videoWrap">
+        <video id="video" autoplay muted playsinline></video>
+        <canvas id="canvas"></canvas>
+        <div class="video-overlay-msg" id="overlayMsg">Click "Start camera" to begin. Your video stays in this browser tab — nothing is uploaded or recorded.</div>
+      </div>
+      <div class="controls">
+        <button class="btn" id="startBtn">Start camera</button>
+        <button class="btn ghost" id="calibrateBtn" disabled>Calibrate neutral pose</button>
+        <button class="btn ghost" id="stopBtn" disabled>Stop</button>
+      </div>
+      <div class="status-line" id="statusLine">Idle</div>
+    </div>
+
+    <div class="panel">
+      <h3 style="font-size:.9rem; color:var(--mist); text-transform:none; margin-bottom:2px;">Openness score</h3>
+      <div class="score-big" id="scoreBig">--</div>
+      <div class="score-tag tag-neutral" id="scoreTag">Waiting for pose</div>
+      <canvas class="spark-canvas" id="sparkCanvas"></canvas>
+
+      <div style="margin-top:16px;">
+        <div class="metric-row">
+          <span class="label">Shoulder / hip width ratio</span>
+          <span class="val" id="metricShoulderHip">--</span>
+        </div>
+        <div class="metric-track"><div class="metric-fill" id="fillShoulderHip"></div></div>
+
+        <div class="metric-row" style="margin-top:10px;">
+          <span class="label">Arm openness</span>
+          <span class="val" id="metricArms">--</span>
+        </div>
+        <div class="metric-track"><div class="metric-fill" id="fillArms"></div></div>
+
+        <div class="metric-row" style="margin-top:10px;">
+          <span class="label">Shoulder height (vs. calibrated)</span>
+          <span class="val" id="metricShoulderHeight">--</span>
+        </div>
+        <div class="metric-track"><div class="metric-fill" id="fillShoulderHeight"></div></div>
+
+        <div class="metric-row" style="margin-top:10px;">
+          <span class="label">Head drop</span>
+          <span class="val" id="metricHeadDrop">--</span>
+        </div>
+        <div class="metric-track"><div class="metric-fill" id="fillHeadDrop"></div></div>
+      </div>
+
+      <div class="note">
+        <strong>Why calibration matters:</strong> raw pixel distances depend entirely on how far you're sitting from the camera, so "shoulder height" and "head drop" are measured relative to a neutral baseline you set yourself, not an absolute value. Click <strong>"Calibrate neutral pose"</strong> after starting, sitting in your normal resting position, to set that baseline.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { PoseLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+const $ = (id) => document.getElementById(id);
+const video = $('video');
+const canvas = $('canvas');
+const ctx = canvas.getContext('2d');
+
+let poseLandmarker = null;
+let stream = null;
+let rafId = null;
+let running = false;
+
+// Baseline captured via "Calibrate neutral pose" — until set, height/drop metrics
+// are shown relative to the very first detected frame as a rough default.
+let baseline = null;
+const scoreHistory = [];
+
+const LM = { NOSE:0, L_SHOULDER:11, R_SHOULDER:12, L_ELBOW:13, R_ELBOW:14, L_WRIST:15, R_WRIST:16, L_HIP:23, R_HIP:24 };
+
+function dist(a, b){ return Math.hypot(a.x - b.x, a.y - b.y); }
+
+$('startBtn').addEventListener('click', startDemo);
+$('stopBtn').addEventListener('click', stopDemo);
+$('calibrateBtn').addEventListener('click', () => { baseline = null; /* captured on next frame */ armCalibration = true; });
+let armCalibration = false;
+
+async function startDemo(){
+  $('startBtn').disabled = true;
+  $('statusLine').textContent = 'Loading pose model…';
+  try{
+    const vision = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+    );
+    poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+        delegate: "GPU"
+      },
+      runningMode: "VIDEO",
+      numPoses: 1
+    });
+  }catch(err){
+    $('statusLine').textContent = 'Failed to load pose model: ' + err.message;
+    $('startBtn').disabled = false;
+    return;
+  }
+
+  $('statusLine').textContent = 'Requesting camera…';
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+  }catch(err){
+    $('statusLine').textContent = 'Camera unavailable: ' + err.message;
+    $('startBtn').disabled = false;
+    return;
+  }
+
+  video.srcObject = stream;
+  await video.play();
+  $('overlayMsg').style.display = 'none';
+  $('calibrateBtn').disabled = false;
+  $('stopBtn').disabled = false;
+  $('statusLine').textContent = 'Running — stand/sit naturally, then calibrate';
+  running = true;
+  loop();
+}
+
+function stopDemo(){
+  running = false;
+  if(rafId) cancelAnimationFrame(rafId);
+  if(stream) stream.getTracks().forEach(t => t.stop());
+  video.srcObject = null;
+  $('startBtn').disabled = false;
+  $('calibrateBtn').disabled = true;
+  $('stopBtn').disabled = true;
+  $('overlayMsg').style.display = 'flex';
+  $('overlayMsg').textContent = 'Stopped. Click "Start camera" to begin again.';
+  $('statusLine').textContent = 'Idle';
+  $('scoreBig').textContent = '--';
+  $('scoreTag').textContent = 'Waiting for pose';
+  $('scoreTag').className = 'score-tag tag-neutral';
+}
+
+function loop(){
+  if(!running) return;
+  if(video.videoWidth){
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.save();
+    ctx.scale(-1, 1); // mirror, feels natural for a self-facing camera
+    ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+    ctx.restore();
+
+    const result = poseLandmarker.detectForVideo(video, performance.now());
+    if(result.landmarks && result.landmarks.length > 0){
+      const lm = result.landmarks[0];
+      drawSkeleton(lm);
+      computeMetrics(lm);
+      $('statusLine').textContent = 'Pose detected';
+    } else {
+      $('statusLine').textContent = 'No pose detected — step back so your shoulders are visible';
+    }
+  }
+  rafId = requestAnimationFrame(loop);
+}
+
+function drawSkeleton(lm){
+  const w = canvas.width, h = canvas.height;
+  const pairs = [[LM.L_SHOULDER,LM.R_SHOULDER],[LM.L_SHOULDER,LM.L_ELBOW],[LM.L_ELBOW,LM.L_WRIST],
+                 [LM.R_SHOULDER,LM.R_ELBOW],[LM.R_ELBOW,LM.R_WRIST],[LM.L_SHOULDER,LM.L_HIP],
+                 [LM.R_SHOULDER,LM.R_HIP],[LM.L_HIP,LM.R_HIP]];
+  ctx.save();
+  ctx.scale(-1, 1);
+  ctx.strokeStyle = 'rgba(143,163,119,.85)';
+  ctx.lineWidth = 3;
+  pairs.forEach(([a,b]) => {
+    ctx.beginPath();
+    ctx.moveTo(-lm[a].x*w, lm[a].y*h);
+    ctx.lineTo(-lm[b].x*w, lm[b].y*h);
+    ctx.stroke();
+  });
+  ctx.fillStyle = '#EDE7DA';
+  [LM.NOSE,LM.L_SHOULDER,LM.R_SHOULDER,LM.L_WRIST,LM.R_WRIST,LM.L_HIP,LM.R_HIP].forEach(i => {
+    ctx.beginPath();
+    ctx.arc(-lm[i].x*w, lm[i].y*h, 5, 0, Math.PI*2);
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+function computeMetrics(lm){
+  const shoulderWidth = dist(lm[LM.L_SHOULDER], lm[LM.R_SHOULDER]);
+  const hipWidth = dist(lm[LM.L_HIP], lm[LM.R_HIP]);
+  const shoulderHipRatio = shoulderWidth / Math.max(hipWidth, 0.001);
+
+  const shoulderMidY = (lm[LM.L_SHOULDER].y + lm[LM.R_SHOULDER].y) / 2;
+  const shoulderMidX = (lm[LM.L_SHOULDER].x + lm[LM.R_SHOULDER].x) / 2;
+  const hipMidY = (lm[LM.L_HIP].y + lm[LM.R_HIP].y) / 2;
+  const torsoLen = Math.max(Math.abs(hipMidY - shoulderMidY), 0.001);
+
+  const wristSpread = (dist(lm[LM.L_WRIST], {x:shoulderMidX, y:shoulderMidY}) +
+                        dist(lm[LM.R_WRIST], {x:shoulderMidX, y:shoulderMidY})) / 2;
+  const armOpenness = wristSpread / Math.max(shoulderWidth, 0.001);
+
+  const headDrop = (lm[LM.NOSE].y - shoulderMidY) / torsoLen; // more negative = head held higher above shoulders
+
+  if(armCalibration){
+    baseline = { shoulderHipRatio, shoulderMidY, torsoLen, headDrop };
+    armCalibration = false;
+    $('statusLine').textContent = 'Calibrated to current pose as neutral baseline';
+  }
+  if(!baseline){
+    baseline = { shoulderHipRatio, shoulderMidY, torsoLen, headDrop };
+  }
+
+  const shoulderHeightDelta = (baseline.shoulderMidY - shoulderMidY) / torsoLen; // positive = shoulders raised vs baseline
+  const headDropDelta = headDrop - baseline.headDrop; // positive = head dropped lower vs baseline
+
+  // ---- Combine into a single 0-100 openness score ----
+  // Each term is clamped/scaled by hand-picked ranges based on plausible human motion —
+  // these are starting points for tuning, not calibrated against any dataset.
+  const ratioScore   = clamp((shoulderHipRatio - baseline.shoulderHipRatio) * 220, -25, 25);
+  const armScore     = clamp((armOpenness - 0.9) * 40, -20, 25);
+  const heightScore  = clamp(shoulderHeightDelta * 140, -20, 20);
+  const headScore    = clamp(-headDropDelta * 160, -20, 20);
+
+  const raw = 50 + ratioScore + armScore + heightScore + headScore;
+  const score = clamp(raw, 0, 100);
+
+  scoreHistory.push(score);
+  if(scoreHistory.length > 150) scoreHistory.shift();
+
+  $('scoreBig').textContent = Math.round(score);
+  const tag = $('scoreTag');
+  if(score >= 62){ tag.textContent = 'Open / expansive'; tag.className = 'score-tag tag-open'; }
+  else if(score <= 38){ tag.textContent = 'Closed / contracted'; tag.className = 'score-tag tag-closed'; }
+  else { tag.textContent = 'Neutral'; tag.className = 'score-tag tag-neutral'; }
+
+  $('metricShoulderHip').textContent = shoulderHipRatio.toFixed(2);
+  $('fillShoulderHip').style.width = clamp((shoulderHipRatio/2)*100, 0, 100) + '%';
+
+  $('metricArms').textContent = armOpenness.toFixed(2);
+  $('fillArms').style.width = clamp((armOpenness/2.2)*100, 0, 100) + '%';
+
+  $('metricShoulderHeight').textContent = (shoulderHeightDelta >= 0 ? '+' : '') + shoulderHeightDelta.toFixed(2);
+  $('fillShoulderHeight').style.width = clamp(((shoulderHeightDelta+0.3)/0.6)*100, 0, 100) + '%';
+
+  $('metricHeadDrop').textContent = (headDropDelta >= 0 ? '+' : '') + headDropDelta.toFixed(2);
+  $('fillHeadDrop').style.width = clamp(((headDropDelta+0.3)/0.6)*100, 0, 100) + '%';
+
+  drawSpark();
+}
+
+function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
+
+const sparkCanvas = $('sparkCanvas');
+const sparkCtx = sparkCanvas.getContext('2d');
+function drawSpark(){
+  const w = sparkCanvas.clientWidth || 300, h = sparkCanvas.clientHeight || 60;
+  sparkCanvas.width = w; sparkCanvas.height = h;
+  sparkCtx.clearRect(0,0,w,h);
+  if(scoreHistory.length < 2) return;
+  sparkCtx.beginPath();
+  scoreHistory.forEach((s,i) => {
+    const x = (i/(scoreHistory.length-1)) * (w-4) + 2;
+    const y = h - 2 - (s/100)*(h-4);
+    i === 0 ? sparkCtx.moveTo(x,y) : sparkCtx.lineTo(x,y);
+  });
+  sparkCtx.strokeStyle = '#8FA377';
+  sparkCtx.lineWidth = 1.6;
+  sparkCtx.stroke();
+}
+</script>
+</body>
+</html>

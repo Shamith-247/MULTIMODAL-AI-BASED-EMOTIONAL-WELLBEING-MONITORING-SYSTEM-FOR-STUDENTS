@@ -1,0 +1,566 @@
+# ======================================================================
+# Face Model v7 - Real-World Generalization Pipeline (single-cell version)
+# ======================================================================
+
+
+# ---- Face Model v7 — Real-World Generalization Pipeline ----
+
+# ---- Cell 1 — Install dependencies ----
+# facenet-pytorch's PyPI sdist can fail with "Getting requirements to build wheel"
+# on current Colab pip (its setup.py needs README.md, which the sdist sometimes
+# lacks). Installing straight from GitHub avoids that packaging issue.
+!pip install -q --upgrade pip setuptools wheel
+!pip install -q git+https://github.com/timesler/facenet-pytorch.git
+!pip install -q datasets pdf2image
+!apt-get -qq install -y poppler-utils
+
+
+
+# ---- Cell 2 — Imports and configuration ----
+import os, json, random, warnings
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import Dataset, DataLoader
+import torchvision.transforms as T
+from PIL import Image
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import precision_recall_fscore_support, classification_report, confusion_matrix
+from facenet_pytorch import MTCNN, InceptionResnetV1
+from datasets import load_dataset
+
+warnings.filterwarnings("ignore")
+SEED = 42
+random.seed(SEED); np.random.seed(SEED); torch.manual_seed(SEED)
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print("torch:", torch.__version__, "| device:", device)
+
+CONFIG = {
+    "img_size": 160,
+    "batch_size": 64,
+    "eval_batch_size": 128,
+    "norm_mean": [0.5, 0.5, 0.5],
+    "norm_std": [0.5, 0.5, 0.5],
+    "dropout": 0.3,
+    "phase1_epochs": 6,
+    "phase2_epochs": 8,
+    "phase3_epochs": 10,
+    "phase1_lr": 1e-3,
+    "phase2_lr": 3e-4,
+    "phase3_lr": 3e-5,
+    "weight_decay": 1e-4,
+    "early_stop_patience": 5,
+    "val_size": 0.15,
+    "test_size": 0.15,
+    "mtcnn_margin": 20,
+}
+
+# NORMALIZATION DESIGN (fixes the v6 double-normalization / train-test mismatch):
+# MTCNN runs with post_process=False, so it only detects + aligns + crops a
+# 160x160 RGB face and hands back RAW pixel values (no standardization baked in).
+# All augmentation is applied to this raw crop. Exactly ONE normalization step
+# (mean=0.5, std=0.5 on a [0,1]-scaled tensor -- equivalent to facenet-pytorch's
+# own fixed_image_standardization) is applied at the end, identically for
+# training, validation, test, and real-world inference (Cells 8, 16, 17 all
+# share this same `eval_tf`/`norm_tf`).
+
+from google.colab import drive
+drive.mount("/content/drive")
+SAVE_DIR = "/content/drive/MyDrive/signalwell-models"
+os.makedirs(SAVE_DIR, exist_ok=True)
+SAVE_PATH = os.path.join(SAVE_DIR, "face_model_v7_best.pt")
+print("Checkpoints will be saved to:", SAVE_PATH)
+
+
+
+# ---- Cell 3 — Load RAF-DB ----
+face_ds_full = load_dataset("deanngkl/raf-db-7emotions")
+print(face_ds_full)
+label_names = face_ds_full["train"].features["label"].names
+print("Label names:", label_names)
+NUM_CLASSES = len(label_names)
+
+
+
+# ---- Cell 4 — Inspect dataset structure and identity metadata ----
+print("=== DEBUG: dataset structure ===")
+for split in face_ds_full.keys():
+    print(f"Split \'{split}\': {len(face_ds_full[split])} samples")
+
+print("\nFeatures:", face_ds_full["train"].features)
+print("\nSample item keys:", list(face_ds_full["train"][0].keys()))
+
+sample = face_ds_full["train"][0]
+for k, v in sample.items():
+    preview = v if not hasattr(v, "size") else f"<image size={v.size}>"
+    print(f"  {k}: type={type(v)}, value/preview={preview}")
+
+identity_candidates = [c for c in face_ds_full["train"].column_names
+                        if any(k in c.lower() for k in ["subject", "person", "identity", "actor"])]
+print("\nPossible identity-related columns found:", identity_candidates)
+
+HAS_IDENTITY = False
+IDENTITY_COL = None
+if len(identity_candidates) > 0:
+    IDENTITY_COL = identity_candidates[0]
+    HAS_IDENTITY = True
+    print(f"-> Using \'{IDENTITY_COL}\' as identity/subject column.")
+else:
+    print("-> No identity/subject metadata found in this dataset.")
+    print("   This matches the known limitation of the public RAF-DB release: it")
+    print("   does NOT ship subject/person identity labels, so we CANNOT build a")
+    print("   provably subject-independent split. Cell 6 will flag this explicitly")
+    print("   instead of pretending the resulting split is subject-independent.")
+
+print("\nHAS_IDENTITY =", HAS_IDENTITY)
+
+
+
+# ---- Cell 5 — Analyze class distribution ----
+train_labels_all = np.array(face_ds_full["train"]["label"])
+counts = np.bincount(train_labels_all, minlength=NUM_CLASSES)
+print("Class distribution (full train split, before splitting):")
+for name, c in zip(label_names, counts):
+    print(f"  {name:10s}: {c:5d} ({c/len(train_labels_all)*100:.1f}%)")
+
+plt.figure(figsize=(7, 4))
+plt.bar(label_names, counts)
+plt.title("RAF-DB class distribution")
+plt.ylabel("count")
+plt.xticks(rotation=30)
+plt.tight_layout()
+plt.show()
+
+IMBALANCE_RATIO = counts.max() / max(counts.min(), 1)
+print(f"\nImbalance ratio (max/min class count): {IMBALANCE_RATIO:.2f}x")
+USE_CLASS_WEIGHTS = IMBALANCE_RATIO > 1.5
+print("Will use class weighting in the loss:", USE_CLASS_WEIGHTS)
+
+
+
+# ---- Cell 6 — Create subject-independent (or safest possible) split ----
+all_indices = np.arange(len(train_labels_all))
+
+if HAS_IDENTITY:
+    identities = np.array(face_ds_full["train"][IDENTITY_COL])
+    unique_ids = np.unique(identities)
+    id_to_label = {}
+    for uid in unique_ids:
+        labs = train_labels_all[identities == uid]
+        id_to_label[uid] = np.bincount(labs, minlength=NUM_CLASSES).argmax()
+    strat_labels = [id_to_label[uid] for uid in unique_ids]
+
+    trainval_ids, test_ids = train_test_split(
+        unique_ids, test_size=CONFIG["test_size"], random_state=SEED, stratify=strat_labels)
+    trainval_strat = [id_to_label[uid] for uid in trainval_ids]
+    val_frac_of_trainval = CONFIG["val_size"] / (1 - CONFIG["test_size"])
+    train_ids, val_ids = train_test_split(
+        trainval_ids, test_size=val_frac_of_trainval, random_state=SEED, stratify=trainval_strat)
+
+    train_idx = all_indices[np.isin(identities, train_ids)]
+    val_idx = all_indices[np.isin(identities, val_ids)]
+    test_idx = all_indices[np.isin(identities, test_ids)]
+
+    print("Subject-independent split created.")
+    print(f"  #identities -> train={len(train_ids)} val={len(val_ids)} test={len(test_ids)}")
+    SPLIT_IS_SUBJECT_INDEPENDENT = True
+else:
+    train_idx, temp_idx = train_test_split(
+        all_indices, test_size=(CONFIG["val_size"] + CONFIG["test_size"]),
+        random_state=SEED, stratify=train_labels_all)
+    temp_labels = train_labels_all[temp_idx]
+    rel_test_size = CONFIG["test_size"] / (CONFIG["val_size"] + CONFIG["test_size"])
+    val_idx, test_idx = train_test_split(
+        temp_idx, test_size=rel_test_size, random_state=SEED, stratify=temp_labels)
+    SPLIT_IS_SUBJECT_INDEPENDENT = False
+    print("WARNING: no identity metadata available -> this is an IMAGE-LEVEL split.")
+    print("The same person MAY appear in more than one split; we cannot confirm or")
+    print("rule that out. Treat test-set numbers below as an optimistic estimate of")
+    print("real-world generalization, not a subject-independent guarantee.")
+
+print(f"\nFinal sizes -> train={len(train_idx)} val={len(val_idx)} test={len(test_idx)}")
+
+raw_train_split = face_ds_full["train"].select(train_idx)
+raw_val_split = face_ds_full["train"].select(val_idx)
+raw_test_split = face_ds_full["train"].select(test_idx)
+
+
+
+# ---- Cell 7 — MTCNN preprocessing ----
+mtcnn = MTCNN(image_size=CONFIG["img_size"], margin=CONFIG["mtcnn_margin"],
+              post_process=False, select_largest=True, device=device)
+
+def mtcnn_crop(pil_img):
+    """Detect + align + crop a single face. Returns a raw (unnormalized) 160x160
+    PIL RGB image, or None if no face was detected."""
+    pil_img = pil_img.convert("RGB")
+    with torch.no_grad():
+        face_tensor = mtcnn(pil_img)
+    if face_tensor is None:
+        return None
+    face_tensor = face_tensor.clamp(0, 255).byte()
+    return T.ToPILImage()(face_tensor)
+
+def precrop_split(hf_split, name):
+    crops, labels, dropped = [], [], 0
+    for i in range(len(hf_split)):
+        item = hf_split[i]
+        face = mtcnn_crop(item["image"])
+        if face is None:
+            dropped += 1
+            continue
+        crops.append(face)
+        labels.append(item["label"])
+    print(f"[{name}] kept {len(crops)}/{len(hf_split)} images "
+          f"({dropped} had no face detected by MTCNN and were dropped)")
+    return crops, labels
+
+print("Running MTCNN once over each split (this can take a few minutes)...")
+train_crops, train_crop_labels = precrop_split(raw_train_split, "train")
+val_crops, val_crop_labels = precrop_split(raw_val_split, "val")
+test_crops, test_crop_labels = precrop_split(raw_test_split, "test")
+
+
+
+# ---- Cell 8 — Dataset and DataLoaders ----
+IMG_SIZE = CONFIG["img_size"]
+norm_tf = T.Normalize(CONFIG["norm_mean"], CONFIG["norm_std"])
+
+train_aug = T.Compose([
+    T.RandomHorizontalFlip(p=0.5),
+    T.RandomRotation(degrees=8),
+    T.RandomAffine(degrees=0, translate=(0.05, 0.05)),
+    T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.1, hue=0.02),
+    T.RandomApply([T.GaussianBlur(kernel_size=3)], p=0.15),
+    T.ToTensor(),
+    norm_tf,
+])
+
+eval_tf = T.Compose([
+    T.ToTensor(),
+    norm_tf,
+])
+
+class FaceCropDataset(Dataset):
+    def __init__(self, crops, labels, train=False):
+        self.crops = crops
+        self.labels = labels
+        self.train = train
+    def __len__(self):
+        return len(self.crops)
+    def __getitem__(self, idx):
+        face = self.crops[idx]
+        tf = train_aug if self.train else eval_tf
+        return tf(face), self.labels[idx]
+
+train_ds = FaceCropDataset(train_crops, train_crop_labels, train=True)
+val_ds = FaceCropDataset(val_crops, val_crop_labels, train=False)
+test_ds = FaceCropDataset(test_crops, test_crop_labels, train=False)
+
+train_labels_arr = np.array(train_crop_labels)
+class_counts_post = np.bincount(train_labels_arr, minlength=NUM_CLASSES)
+if USE_CLASS_WEIGHTS:
+    class_weights = 1.0 / np.maximum(class_counts_post, 1)
+    class_weights = class_weights / class_weights.sum() * NUM_CLASSES
+    class_weights_t = torch.tensor(class_weights, dtype=torch.float32).to(device)
+    print("Class weights:", dict(zip(label_names, class_weights.round(3))))
+else:
+    class_weights_t = None
+
+train_loader = DataLoader(train_ds, batch_size=CONFIG["batch_size"], shuffle=True,
+                           num_workers=2, drop_last=True)
+val_loader = DataLoader(val_ds, batch_size=CONFIG["eval_batch_size"], shuffle=False, num_workers=2)
+test_loader = DataLoader(test_ds, batch_size=CONFIG["eval_batch_size"], shuffle=False, num_workers=2)
+
+print(f"Loaders ready: train={len(train_ds)} val={len(val_ds)} test={len(test_ds)}")
+
+
+
+# ---- Cell 9 — Display sample cropped faces ----
+def denorm_for_display(tensor):
+    mean = torch.tensor(CONFIG["norm_mean"]).view(3, 1, 1)
+    std = torch.tensor(CONFIG["norm_std"]).view(3, 1, 1)
+    img = tensor.cpu() * std + mean
+    return img.clamp(0, 1).permute(1, 2, 0).numpy()
+
+fig, axes = plt.subplots(2, 6, figsize=(16, 6))
+idxs = np.random.choice(len(train_ds), 12, replace=False)
+for ax, i in zip(axes.flat, idxs):
+    x, y = train_ds[i]
+    ax.imshow(denorm_for_display(x))
+    ax.set_title(label_names[y], fontsize=10)
+    ax.axis("off")
+plt.suptitle("Sample MTCNN-cropped + augmented training faces")
+plt.tight_layout()
+plt.show()
+
+
+
+# ---- Cell 10 — Build v7 model ----
+class FaceEmotionModel(nn.Module):
+    def __init__(self, num_classes, dropout=0.3):
+        super().__init__()
+        self.backbone = InceptionResnetV1(pretrained="vggface2", classify=False)
+        self.dropout = nn.Dropout(dropout)
+        self.fc = nn.Linear(512, num_classes)
+
+    def forward(self, x):
+        emb = self.backbone(x)
+        emb = self.dropout(emb)
+        return self.fc(emb)
+
+model = FaceEmotionModel(NUM_CLASSES, dropout=CONFIG["dropout"]).to(device)
+n_params = sum(p.numel() for p in model.parameters())
+print(f"Total parameters: {n_params:,}")
+
+
+
+# ---- Cell 11 — Training functions ----
+criterion = nn.CrossEntropyLoss(weight=class_weights_t)
+scaler = torch.cuda.amp.GradScaler(enabled=torch.cuda.is_available())
+best_val_acc = 0.0
+
+@torch.no_grad()
+def evaluate(model, loader):
+    model.eval()
+    total, correct, loss_sum = 0, 0, 0.0
+    all_preds, all_labels = [], []
+    for x, y in loader:
+        x, y = x.to(device), y.to(device)
+        with torch.cuda.amp.autocast(enabled=torch.cuda.is_available()):
+            out = model(x)
+            loss = criterion(out, y)
+        loss_sum += loss.item() * x.size(0)
+        preds = out.argmax(1)
+        correct += (preds == y).sum().item()
+        total += x.size(0)
+        all_preds.append(preds.cpu().numpy())
+        all_labels.append(y.cpu().numpy())
+    return correct / total, loss_sum / total, np.concatenate(all_preds), np.concatenate(all_labels)
+
+def train_one_phase(model, loader, val_loader, optimizer, scheduler, n_epochs, phase_name,
+                     patience=CONFIG["early_stop_patience"]):
+    global best_val_acc
+    epochs_no_improve = 0
+    for epoch in range(n_epochs):
+        model.train()
+        total, correct, running_loss = 0, 0, 0.0
+        for x, y in loader:
+            x, y = x.to(device), y.to(device)
+            optimizer.zero_grad()
+            with torch.cuda.amp.autocast(enabled=torch.cuda.is_available()):
+                out = model(x)
+                loss = criterion(out, y)
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+            if scheduler is not None:
+                scheduler.step()
+            running_loss += loss.item() * x.size(0)
+            correct += (out.argmax(1) == y).sum().item()
+            total += x.size(0)
+
+        val_acc, val_loss, _, _ = evaluate(model, val_loader)
+        train_acc = correct / total
+        print(f"[{phase_name}] epoch {epoch+1}/{n_epochs} "
+              f"train_loss={running_loss/total:.4f} train_acc={train_acc:.4f} "
+              f"val_loss={val_loss:.4f} val_acc={val_acc:.4f} best_val_acc={best_val_acc:.4f}")
+
+        if val_acc > best_val_acc:
+            best_val_acc = val_acc
+            epochs_no_improve = 0
+            torch.save({
+                "state_dict": model.state_dict(),
+                "labels": label_names,
+                "class_to_idx": {l: i for i, l in enumerate(label_names)},
+                "val_acc": best_val_acc,
+                "preprocessing": {
+                    "img_size": CONFIG["img_size"],
+                    "norm_mean": CONFIG["norm_mean"],
+                    "norm_std": CONFIG["norm_std"],
+                    "mtcnn_margin": CONFIG["mtcnn_margin"],
+                    "note": "Single normalization after a raw (post_process=False) MTCNN crop",
+                },
+                "split_is_subject_independent": SPLIT_IS_SUBJECT_INDEPENDENT,
+            }, SAVE_PATH)
+        else:
+            epochs_no_improve += 1
+            if epochs_no_improve >= patience:
+                print(f"Early stopping in {phase_name} (no val improvement for {patience} epochs)")
+                break
+
+
+
+# ---- Cell 12 — Train model ----
+print("\n--- Phase 1: frozen backbone, train head only ---")
+for p in model.backbone.parameters():
+    p.requires_grad = False
+opt1 = torch.optim.AdamW([p for p in model.parameters() if p.requires_grad],
+                          lr=CONFIG["phase1_lr"], weight_decay=CONFIG["weight_decay"])
+sched1 = torch.optim.lr_scheduler.OneCycleLR(opt1, max_lr=CONFIG["phase1_lr"],
+    steps_per_epoch=len(train_loader), epochs=CONFIG["phase1_epochs"])
+train_one_phase(model, train_loader, val_loader, opt1, sched1, CONFIG["phase1_epochs"], "phase1-head")
+
+print("\n--- Phase 2: unfreeze later backbone blocks ---")
+for name, p in model.backbone.named_parameters():
+    if any(k in name for k in ["block8", "repeat_3", "last_linear", "last_bn"]):
+        p.requires_grad = True
+opt2 = torch.optim.AdamW([p for p in model.parameters() if p.requires_grad],
+                          lr=CONFIG["phase2_lr"], weight_decay=CONFIG["weight_decay"])
+sched2 = torch.optim.lr_scheduler.OneCycleLR(opt2, max_lr=CONFIG["phase2_lr"],
+    steps_per_epoch=len(train_loader), epochs=CONFIG["phase2_epochs"])
+train_one_phase(model, train_loader, val_loader, opt2, sched2, CONFIG["phase2_epochs"], "phase2-partial")
+
+print("\n--- Phase 3 (optional): full fine-tune, small LR ---")
+for p in model.parameters():
+    p.requires_grad = True
+opt3 = torch.optim.AdamW(model.parameters(), lr=CONFIG["phase3_lr"], weight_decay=CONFIG["weight_decay"])
+sched3 = torch.optim.lr_scheduler.CosineAnnealingLR(opt3, T_max=CONFIG["phase3_epochs"] * len(train_loader))
+train_one_phase(model, train_loader, val_loader, opt3, sched3, CONFIG["phase3_epochs"], "phase3-full")
+
+print(f"\nBest validation accuracy: {best_val_acc:.4f}")
+print(f"Best checkpoint saved to: {SAVE_PATH}")
+
+
+
+# ---- Cell 13 — Evaluate model ----
+ckpt = torch.load(SAVE_PATH, map_location=device)
+model.load_state_dict(ckpt["state_dict"])
+model.eval()
+print("Loaded best checkpoint. val_acc at save time:", ckpt["val_acc"])
+print("Split subject-independent:", ckpt["split_is_subject_independent"])
+
+test_acc, test_loss, test_preds, test_true = evaluate(model, test_loader)
+print(f"\nTEST accuracy: {test_acc:.4f}  |  test loss: {test_loss:.4f}")
+
+precision, recall, f1, support = precision_recall_fscore_support(
+    test_true, test_preds, average="macro", zero_division=0)
+print(f"Macro precision: {precision:.4f}")
+print(f"Macro recall:    {recall:.4f}")
+print(f"Macro F1:        {f1:.4f}")
+
+
+
+# ---- Cell 14 — Confusion matrix and classification report ----
+print(classification_report(test_true, test_preds, target_names=label_names, digits=4, zero_division=0))
+
+cm = confusion_matrix(test_true, test_preds)
+fig, ax = plt.subplots(figsize=(7, 6))
+im = ax.imshow(cm, cmap="Blues")
+ax.set_xticks(range(NUM_CLASSES)); ax.set_xticklabels(label_names, rotation=45, ha="right")
+ax.set_yticks(range(NUM_CLASSES)); ax.set_yticklabels(label_names)
+ax.set_xlabel("Predicted"); ax.set_ylabel("True")
+ax.set_title("Confusion matrix (test set)")
+for i in range(NUM_CLASSES):
+    for j in range(NUM_CLASSES):
+        ax.text(j, i, cm[i, j], ha="center", va="center",
+                color="white" if cm[i, j] > cm.max() / 2 else "black", fontsize=8)
+plt.colorbar(im)
+plt.tight_layout()
+plt.show()
+
+print("\nPer-emotion accuracy (recall on that class):")
+per_class_acc = cm.diagonal() / np.maximum(cm.sum(axis=1), 1)
+for name, acc in zip(label_names, per_class_acc):
+    print(f"  {name:10s}: {acc:.4f}")
+
+
+
+# ---- Cell 15 — Save best checkpoint ----
+ckpt["test_acc"] = test_acc
+ckpt["macro_f1"] = f1
+ckpt["macro_precision"] = precision
+ckpt["macro_recall"] = recall
+ckpt["per_class_accuracy"] = dict(zip(label_names, per_class_acc.tolist()))
+torch.save(ckpt, SAVE_PATH)
+print("Checkpoint updated with test metrics at:", SAVE_PATH)
+print(json.dumps({k: v for k, v in ckpt.items() if k != "state_dict"}, indent=2, default=str))
+
+
+
+# ---- Cell 16 — Real-world image testing ----
+mtcnn_infer = MTCNN(image_size=CONFIG["img_size"], margin=CONFIG["mtcnn_margin"],
+                     post_process=False, keep_all=True, device=device)
+
+def predict_emotions(image_path_or_pil, show=True):
+    """
+    1. load image
+    2. detect face(s) with MTCNN
+    3. align/crop each to 160x160
+    4. apply the SAME normalization used in training (eval_tf, no extra steps)
+    5. predict all 7 emotion probabilities per face
+    6. return top prediction + confidence per face (and optionally display them)
+    """
+    if isinstance(image_path_or_pil, str):
+        img = Image.open(image_path_or_pil).convert("RGB")
+    else:
+        img = image_path_or_pil.convert("RGB")
+
+    with torch.no_grad():
+        faces = mtcnn_infer(img)
+
+    if faces is None:
+        print("No face detected.")
+        return []
+    if faces.dim() == 3:
+        faces = faces.unsqueeze(0)
+
+    results = []
+    model.eval()
+    with torch.no_grad():
+        for i in range(faces.shape[0]):
+            face_raw = faces[i].clamp(0, 255).byte()
+            face_pil = T.ToPILImage()(face_raw)
+            x = eval_tf(face_pil).unsqueeze(0).to(device)
+            logits = model(x)
+            probs = F.softmax(logits, dim=1)[0].cpu().numpy()
+            top_idx = int(probs.argmax())
+            results.append({
+                "face_index": i,
+                "top_emotion": label_names[top_idx],
+                "confidence": float(probs[top_idx]),
+                "all_probabilities": dict(zip(label_names, probs.tolist())),
+                "face_image": face_pil,
+            })
+
+    if show:
+        fig, axes = plt.subplots(1, len(results), figsize=(4 * len(results), 4))
+        if len(results) == 1:
+            axes = [axes]
+        for ax, r in zip(axes, results):
+            ax.imshow(r["face_image"])
+            ax.set_title(f'{r["top_emotion"]} ({r["confidence"]*100:.1f}%)')
+            ax.axis("off")
+        plt.tight_layout()
+        plt.show()
+
+    return results
+
+# Example:
+# results = predict_emotions("/content/some_photo.jpg")
+# for r in results:
+#     print(r["face_index"], r["top_emotion"], round(r["confidence"], 4))
+
+
+
+# ---- Cell 17 — PDF → 300 DPI → face detection pipeline ----
+from pdf2image import convert_from_path
+
+def predict_emotions_from_pdf(pdf_path, dpi=300, show=True):
+    pages = convert_from_path(pdf_path, dpi=dpi)
+    print(f"Rendered {len(pages)} page(s) from {pdf_path} at {dpi} DPI")
+
+    all_results = []
+    for page_num, page_img in enumerate(pages):
+        print(f"\n--- Page {page_num + 1} ---")
+        page_results = predict_emotions(page_img, show=show)
+        for r in page_results:
+            r["page"] = page_num + 1
+        all_results.append(page_results)
+    return all_results
+
+# Example:
+# all_results = predict_emotions_from_pdf("/content/scanned_photos.pdf", dpi=300)

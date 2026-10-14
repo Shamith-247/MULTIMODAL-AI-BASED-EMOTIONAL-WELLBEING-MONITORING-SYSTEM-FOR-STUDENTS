@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Geometric Landmark Signal — Test Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#10131A; --fog:#1B2029; --hair:#2A303B;
+    --bone:#EDE7DA; --bone-dim:#A9A296;
+    --moss:#8FA377; --moss-dim:#5F7050;
+    --rust:#B85450; --amber:#D98B4A;
+    --mist:#C7CCD6; --mist-dim:#6E7482;
+    --shadow:0 20px 60px rgba(0,0,0,.4);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--ink); color:var(--bone);
+    font-family:'Plus Jakarta Sans',sans-serif; line-height:1.5;
+    -webkit-font-smoothing:antialiased; padding:32px 20px 80px;
+  }
+  h1,h2,h3{font-family:'Space Grotesk',sans-serif; font-weight:600; margin:0 0 .3em 0; letter-spacing:-0.01em;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+  .wrap{max-width:1040px; margin:0 auto;}
+  header{margin-bottom:28px;}
+  header h1{font-size:1.7rem;}
+  header p{color:var(--mist); max-width:680px; font-size:.95rem;}
+  .badge{
+    display:inline-block; font-family:'JetBrains Mono',monospace; font-size:.72rem;
+    color:var(--moss); border:1px solid var(--moss-dim); border-radius:20px;
+    padding:3px 10px; margin-bottom:14px;
+  }
+  .cite{
+    font-size:.78rem; color:var(--mist-dim); border-left:2px solid var(--moss-dim);
+    padding-left:10px; margin:14px 0 0 0; max-width:680px;
+  }
+  .grid{display:grid; grid-template-columns:1fr 360px; gap:20px;}
+  @media (max-width:880px){ .grid{grid-template-columns:1fr;} }
+
+  .panel{
+    background:var(--fog); border:1px solid var(--hair); border-radius:16px;
+    padding:20px; box-shadow:var(--shadow);
+  }
+  .video-wrap{position:relative; border-radius:12px; overflow:hidden; background:#000; aspect-ratio:4/3;}
+  .video-wrap video{display:none;}
+  .video-wrap canvas{width:100%; height:100%; display:block;}
+  .video-overlay-msg{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    text-align:center; padding:24px; color:var(--mist-dim); font-size:.9rem;
+  }
+
+  .controls{display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;}
+  .btn{
+    background:var(--moss); color:#0F1310; border:none; border-radius:10px;
+    padding:10px 18px; font-family:'Plus Jakarta Sans',sans-serif; font-weight:600;
+    font-size:.86rem; cursor:pointer;
+  }
+  .btn.ghost{background:transparent; color:var(--mist); border:1px solid var(--hair);}
+  .btn:disabled{opacity:.4; cursor:not-allowed;}
+  .status-line{margin-top:10px; font-size:.82rem; color:var(--mist-dim); min-height:1.2em;}
+
+  .rank-row{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:8px 0; border-bottom:1px solid var(--hair); font-size:.86rem;
+  }
+  .rank-row:last-child{border-bottom:none;}
+  .rank-row .label{color:var(--bone); text-transform:capitalize;}
+  .rank-row .val{font-family:'JetBrains Mono',monospace; color:var(--moss);}
+  .rank-track{width:100%; height:5px; background:var(--ink); border-radius:4px; margin-top:5px; overflow:hidden;}
+  .rank-fill{height:100%; background:var(--moss); width:0%; transition:width .25s ease;}
+
+  .metric-row{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:7px 0; font-size:.78rem; color:var(--mist-dim);
+  }
+  .metric-row .val{font-family:'JetBrains Mono',monospace; color:var(--mist);}
+  .note{
+    font-size:.78rem; color:var(--mist-dim); margin-top:16px; padding-top:14px;
+    border-top:1px solid var(--hair); line-height:1.55;
+  }
+  .note strong{color:var(--mist);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="badge">standalone test — implementation of the paper's described method, not a downloadable checkpoint</div>
+    <h1>Geometric landmark signal</h1>
+    <p>This paper doesn't release a trained model — it describes a <em>methodology</em>: track how far facial landmarks (mouth corners, eyebrows, eyes) move from a calibrated neutral position, using known associations between specific movements and emotions. This is a real implementation of that described approach, using 68-point facial landmarks, to see whether it behaves differently from your CNN under the same lighting/webcam conditions that gave the CNN trouble.</p>
+    <p class="cite">"The wide opening of the mouth can infer happiness, anger, and disgust. In contrast, fear and sadness can be recognized through the eyes and surprise can be inferred by widening eyes, mouth, and forehead." — Plutchik (1962), as cited in the reference paper. "Geometric-based methods are invariant to face, age, pose, and illumination and give better accuracy than appearance-based methods." — same paper.</p>
+  </header>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="video-wrap" id="videoWrap">
+        <video id="video" autoplay muted playsinline></video>
+        <canvas id="canvas"></canvas>
+        <div class="video-overlay-msg" id="overlayMsg">Click "Start camera" to begin. Your video stays in this browser tab — nothing is uploaded or recorded.</div>
+      </div>
+      <div class="controls">
+        <button class="btn" id="startBtn">Start camera</button>
+        <button class="btn ghost" id="calibrateBtn" disabled>Calibrate neutral face</button>
+        <button class="btn ghost" id="stopBtn" disabled>Stop</button>
+      </div>
+      <div class="status-line" id="statusLine">Idle</div>
+    </div>
+
+    <div class="panel">
+      <h3 style="font-size:.9rem; color:var(--mist); margin-bottom:10px;">Ranked candidates</h3>
+      <div id="rankList">
+        <div class="rank-row"><span class="label">waiting for calibration…</span></div>
+      </div>
+
+      <div class="note">
+        <strong>Raw geometric deltas (vs. calibrated neutral):</strong>
+        <div class="metric-row"><span>Mouth width</span><span class="val" id="mMouthWidth">--</span></div>
+        <div class="metric-row"><span>Mouth height (opening)</span><span class="val" id="mMouthHeight">--</span></div>
+        <div class="metric-row"><span>Eye openness</span><span class="val" id="mEyeOpen">--</span></div>
+        <div class="metric-row"><span>Eyebrow raise</span><span class="val" id="mBrowRaise">--</span></div>
+        <div class="metric-row"><span>Mouth-corner angle (frown/smile)</span><span class="val" id="mCornerAngle">--</span></div>
+      </div>
+
+      <div class="note">
+        <strong>How scoring works:</strong> each candidate emotion gets points when its associated landmark movements (per Plutchik's mapping above) exceed your calibrated baseline. This is a hand-built heuristic implementing the paper's described associations, not a trained classifier — treat the ranking as a rough signal to compare against the CNN, not a validated result.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const video = $('video');
+const canvas = $('canvas');
+const ctx = canvas.getContext('2d');
+
+let stream = null;
+let rafId = null;
+let running = false;
+let modelsReady = false;
+let baseline = null;
+let armCalibration = false;
+
+$('startBtn').addEventListener('click', startDemo);
+$('stopBtn').addEventListener('click', stopDemo);
+$('calibrateBtn').addEventListener('click', () => { armCalibration = true; });
+
+function dist(a, b){ return Math.hypot(a.x - b.x, a.y - b.y); }
+
+async function startDemo(){
+  $('startBtn').disabled = true;
+  $('statusLine').textContent = 'Loading landmark model…';
+  try{
+    if(!modelsReady){
+      const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights';
+      await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+      await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+      modelsReady = true;
+    }
+  }catch(err){
+    $('statusLine').textContent = 'Failed to load landmark model: ' + err.message;
+    $('startBtn').disabled = false;
+    return;
+  }
+
+  $('statusLine').textContent = 'Requesting camera…';
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+  }catch(err){
+    $('statusLine').textContent = 'Camera unavailable: ' + err.message;
+    $('startBtn').disabled = false;
+    return;
+  }
+
+  video.srcObject = stream;
+  await video.play();
+  $('overlayMsg').style.display = 'none';
+  $('calibrateBtn').disabled = false;
+  $('stopBtn').disabled = false;
+  $('statusLine').textContent = 'Running — hold a neutral face, then calibrate';
+  running = true;
+  loop();
+}
+
+function stopDemo(){
+  running = false;
+  if(rafId) cancelAnimationFrame(rafId);
+  if(stream) stream.getTracks().forEach(t => t.stop());
+  video.srcObject = null;
+  $('startBtn').disabled = false;
+  $('calibrateBtn').disabled = true;
+  $('stopBtn').disabled = true;
+  $('overlayMsg').style.display = 'flex';
+  $('overlayMsg').textContent = 'Stopped. Click "Start camera" to begin again.';
+  $('statusLine').textContent = 'Idle';
+  baseline = null;
+  $('rankList').innerHTML = '<div class="rank-row"><span class="label">waiting for calibration…</span></div>';
+}
+
+async function loop(){
+  if(!running) return;
+  if(video.videoWidth){
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.save();
+    ctx.scale(-1,1);
+    ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+    ctx.restore();
+
+    const result = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks();
+    if(result){
+      drawLandmarks(result.landmarks);
+      computeGeometry(result.landmarks);
+      $('statusLine').textContent = 'Face detected';
+    } else {
+      $('statusLine').textContent = 'No face detected';
+    }
+  }
+  rafId = requestAnimationFrame(loop);
+}
+
+function drawLandmarks(landmarks){
+  const pts = landmarks.positions;
+  const w = canvas.width;
+  ctx.save();
+  ctx.fillStyle = 'rgba(143,163,119,.9)';
+  pts.forEach(p => {
+    ctx.beginPath();
+    ctx.arc(w - p.x, p.y, 1.6, 0, Math.PI*2);
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+// 68-point iBUG layout: mouth outer 48-59, mouth inner 60-67,
+// right eye 36-41, left eye 42-47, right brow 17-21, left brow 22-26, jaw 0-16
+function computeGeometry(landmarks){
+  const p = landmarks.positions;
+
+  const mouthWidth = dist(p[48], p[54]);
+  const mouthHeight = dist(p[51], p[57]);
+  const faceWidth = dist(p[0], p[16]); // normalizer, roughly stable across distance-to-camera changes within a session
+
+  const rightEyeOpen = (dist(p[37],p[41]) + dist(p[38],p[40])) / 2;
+  const leftEyeOpen = (dist(p[43],p[47]) + dist(p[44],p[46])) / 2;
+  const eyeOpen = (rightEyeOpen + leftEyeOpen) / 2;
+
+  const rightBrowRaise = dist(p[19], p[37]);
+  const leftBrowRaise = dist(p[24], p[44]);
+  const browRaise = (rightBrowRaise + leftBrowRaise) / 2;
+
+  // Mouth-corner angle vs the mouth's own horizontal midline — positive = corners pulled up (smile-ish), negative = pulled down (frown-ish)
+  const mouthMidY = (p[51].y + p[57].y) / 2;
+  const cornerAngle = mouthMidY - ((p[48].y + p[54].y) / 2);
+
+  const norm = { mouthWidth: mouthWidth/faceWidth, mouthHeight: mouthHeight/faceWidth,
+                 eyeOpen: eyeOpen/faceWidth, browRaise: browRaise/faceWidth, cornerAngle: cornerAngle/faceWidth };
+
+  if(armCalibration){
+    baseline = { ...norm };
+    armCalibration = false;
+    $('statusLine').textContent = 'Calibrated to current face as neutral baseline';
+  }
+  if(!baseline) baseline = { ...norm };
+
+  const d = {
+    mouthWidth: norm.mouthWidth - baseline.mouthWidth,
+    mouthHeight: norm.mouthHeight - baseline.mouthHeight,
+    eyeOpen: norm.eyeOpen - baseline.eyeOpen,
+    browRaise: norm.browRaise - baseline.browRaise,
+    cornerAngle: norm.cornerAngle - baseline.cornerAngle,
+  };
+
+  $('mMouthWidth').textContent = (d.mouthWidth>=0?'+':'') + d.mouthWidth.toFixed(3);
+  $('mMouthHeight').textContent = (d.mouthHeight>=0?'+':'') + d.mouthHeight.toFixed(3);
+  $('mEyeOpen').textContent = (d.eyeOpen>=0?'+':'') + d.eyeOpen.toFixed(3);
+  $('mBrowRaise').textContent = (d.browRaise>=0?'+':'') + d.browRaise.toFixed(3);
+  $('mCornerAngle').textContent = (d.cornerAngle>=0?'+':'') + d.cornerAngle.toFixed(3);
+
+  // ---- Heuristic scoring implementing the paper's stated associations ----
+  const mouthWide = Math.max(0, d.mouthWidth) * 8 + Math.max(0, d.mouthHeight) * 6;
+  const eyesNarrowed = Math.max(0, -d.eyeOpen) * 10;
+  const eyesWidened = Math.max(0, d.eyeOpen) * 10;
+  const browsRaised = Math.max(0, d.browRaise) * 10;
+  const browsLowered = Math.max(0, -d.browRaise) * 8;
+  const cornersUp = Math.max(0, d.cornerAngle) * 12;
+  const cornersDown = Math.max(0, -d.cornerAngle) * 10;
+
+  const scores = {
+    happiness: mouthWide * 0.5 + cornersUp,
+    surprise:  eyesWidened + browsRaised + Math.max(0, d.mouthHeight) * 10,
+    anger:     mouthWide * 0.3 + browsLowered + cornersDown * 0.4,
+    disgust:   mouthWide * 0.3 + cornersDown * 0.3,
+    fear:      eyesNarrowed * 0.5 + browsRaised * 0.5,
+    sadness:   eyesNarrowed * 0.5 + cornersDown * 0.6,
+    neutral:   3, // small constant floor so it can still "win" when nothing moved much
+  };
+
+  const total = Object.values(scores).reduce((a,b)=>a+b, 0) || 1;
+  const ranked = Object.entries(scores)
+    .map(([name, s]) => [name, s/total])
+    .sort((a,b) => b[1]-a[1]);
+
+  $('rankList').innerHTML = ranked.map(([name, prob]) => `
+    <div class="rank-row">
+      <span class="label">${name}</span>
+      <span class="val">${Math.round(prob*100)}%</span>
+    </div>
+    <div class="rank-track"><div class="rank-fill" style="width:${Math.round(prob*100)}%"></div></div>
+  `).join('');
+}
+</script>
+</body>
+</html>

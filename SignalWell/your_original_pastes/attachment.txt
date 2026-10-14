@@ -1,0 +1,214 @@
+ Installing build dependencies ... done
+  Getting requirements to build wheel ... done
+  Preparing metadata (pyproject.toml) ... done
+  Installing build dependencies ... done
+  Getting requirements to build wheel ... done
+  Installing backend dependencies ... done
+  Preparing metadata (pyproject.toml) ... done
+  Installing build dependencies ... done
+  error: subprocess-exited-with-error
+  
+  × Getting requirements to build wheel did not run successfully.
+  │ exit code: 1
+  ╰─> No available output.
+  
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+  Getting requirements to build wheel ... error
+ERROR: Failed to build 'Pillow' when getting requirements to build wheel
+torch: 2.11.0+cu128 | device: cuda
+Mounted at /content/drive
+Checkpoints will be saved to: /content/drive/MyDrive/signalwell-models/face_model_v7_best.pt
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+WARNING:huggingface_hub.utils._http:Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+README.md: 100%
+ 559/559 [00:00<00:00, 57.1kB/s]
+data/train-00000-of-00005.parquet: reconstructing file: 100%
+ 8.98MB / 8.98MB,  880kB/s  
+data/train-00000-of-00005.parquet: downloading bytes: 
+ 8.30MB,  810kB/s  
+data/train-00001-of-00005.parquet: reconstructing file: 100%
+ 8.98MB / 8.98MB,  887kB/s  
+data/train-00001-of-00005.parquet: downloading bytes: 
+ 8.33MB,  823kB/s  
+data/train-00002-of-00005.parquet: reconstructing file: 100%
+ 9.00MB / 9.00MB,  889kB/s  
+data/train-00002-of-00005.parquet: downloading bytes: 
+ 8.38MB,  826kB/s  
+data/train-00003-of-00005.parquet: reconstructing file: 100%
+  420MB /  420MB, 33.4MB/s  
+data/train-00003-of-00005.parquet: downloading bytes: 
+  420MB, 32.6MB/s  
+data/train-00004-of-00005.parquet: reconstructing file: 100%
+ 1.61GB / 1.61GB,  101MB/s  
+data/train-00004-of-00005.parquet: downloading bytes: 
+ 1.61GB,  104MB/s  
+Generating train split: 100%
+ 20471/20471 [00:17<00:00, 1317.95 examples/s]
+DatasetDict({
+    train: Dataset({
+        features: ['image', 'bbox', 'label'],
+        num_rows: 20471
+    })
+})
+Label names: ['anger', 'disgust', 'fear', 'happiness', 'neutral', 'sadness', 'surprise']
+=== DEBUG: dataset structure ===
+Split 'train': 20471 samples
+
+Features: {'image': Image(mode=None, decode=True), 'bbox': List(Value('float32'), length=4), 'label': ClassLabel(names=['anger', 'disgust', 'fear', 'happiness', 'neutral', 'sadness', 'surprise'])}
+
+Sample item keys: ['image', 'bbox', 'label']
+  image: type=<class 'PIL.JpegImagePlugin.JpegImageFile'>, value/preview=<image size=(100, 100)>
+  bbox: type=<class 'list'>, value/preview=[0.5, 0.5, 1.0, 1.0]
+  label: type=<class 'int'>, value/preview=5
+
+Possible identity-related columns found: []
+-> No identity/subject metadata found in this dataset.
+   This matches the known limitation of the public RAF-DB release: it
+   does NOT ship subject/person identity labels, so we CANNOT build a
+   provably subject-independent split. Cell 6 will flag this explicitly
+   instead of pretending the resulting split is subject-independent.
+
+HAS_IDENTITY = False
+Class distribution (full train split, before splitting):
+  anger     :  4071 (19.9%)
+  disgust   :   877 (4.3%)
+  fear      :   355 (1.7%)
+  happiness :  5957 (29.1%)
+  neutral   :  5132 (25.1%)
+  sadness   :  2460 (12.0%)
+  surprise  :  1619 (7.9%)
+
+
+Imbalance ratio (max/min class count): 16.78x
+Will use class weighting in the loss: True
+WARNING: no identity metadata available -> this is an IMAGE-LEVEL split.
+The same person MAY appear in more than one split; we cannot confirm or
+rule that out. Treat test-set numbers below as an optimistic estimate of
+real-world generalization, not a subject-independent guarantee.
+
+Final sizes -> train=14329 val=3071 test=3071
+Running MTCNN once over each split (this can take a few minutes)...
+[train] kept 13120/14329 images (1209 had no face detected by MTCNN and were dropped)
+[val] kept 2819/3071 images (252 had no face detected by MTCNN and were dropped)
+[test] kept 2845/3071 images (226 had no face detected by MTCNN and were dropped)
+Class weights: {'anger': np.float64(0.3), 'disgust': np.float64(1.341), 'fear': np.float64(3.702), 'happiness': np.float64(0.205), 'neutral': np.float64(0.211), 'sadness': np.float64(0.513), 'surprise': np.float64(0.728)}
+Loaders ready: train=13120 val=2819 test=2845
+
+100%
+ 107M/107M [00:01<00:00, 128MB/s]
+Total parameters: 27,913,918
+
+--- Phase 1: frozen backbone, train head only ---
+[phase1-head] epoch 1/6 train_loss=1.9342 train_acc=0.1886 val_loss=1.9029 val_acc=0.3668 best_val_acc=0.0000
+[phase1-head] epoch 2/6 train_loss=1.8446 train_acc=0.4003 val_loss=1.7839 val_acc=0.4335 best_val_acc=0.3668
+[phase1-head] epoch 3/6 train_loss=1.7405 train_acc=0.4286 val_loss=1.7083 val_acc=0.4303 best_val_acc=0.4335
+[phase1-head] epoch 4/6 train_loss=1.6805 train_acc=0.4378 val_loss=1.6698 val_acc=0.4299 best_val_acc=0.4335
+[phase1-head] epoch 5/6 train_loss=1.6547 train_acc=0.4419 val_loss=1.6581 val_acc=0.4360 best_val_acc=0.4335
+[phase1-head] epoch 6/6 train_loss=1.6489 train_acc=0.4372 val_loss=1.6561 val_acc=0.4338 best_val_acc=0.4360
+
+--- Phase 2: unfreeze later backbone blocks ---
+[phase2-partial] epoch 1/8 train_loss=1.2782 train_acc=0.6241 val_loss=0.9816 val_acc=0.7446 best_val_acc=0.4360
+[phase2-partial] epoch 2/8 train_loss=0.9111 train_acc=0.7447 val_loss=0.8979 val_acc=0.7446 best_val_acc=0.7446
+[phase2-partial] epoch 3/8 train_loss=0.7967 train_acc=0.7834 val_loss=0.9134 val_acc=0.8173 best_val_acc=0.7446
+[phase2-partial] epoch 4/8 train_loss=0.6989 train_acc=0.8105 val_loss=0.7922 val_acc=0.8092 best_val_acc=0.8173
+[phase2-partial] epoch 5/8 train_loss=0.5928 train_acc=0.8409 val_loss=0.6873 val_acc=0.8287 best_val_acc=0.8173
+[phase2-partial] epoch 6/8 train_loss=0.4816 train_acc=0.8673 val_loss=0.6780 val_acc=0.8485 best_val_acc=0.8287
+[phase2-partial] epoch 7/8 train_loss=0.3833 train_acc=0.8972 val_loss=0.6564 val_acc=0.8588 best_val_acc=0.8485
+[phase2-partial] epoch 8/8 train_loss=0.3392 train_acc=0.9134 val_loss=0.6662 val_acc=0.8620 best_val_acc=0.8588
+
+--- Phase 3 (optional): full fine-tune, small LR ---
+[phase3-full] epoch 1/10 train_loss=0.3746 train_acc=0.9016 val_loss=0.6945 val_acc=0.8680 best_val_acc=0.8620
+[phase3-full] epoch 2/10 train_loss=0.3346 train_acc=0.9107 val_loss=0.6247 val_acc=0.8730 best_val_acc=0.8680
+[phase3-full] epoch 3/10 train_loss=0.2611 train_acc=0.9366 val_loss=0.6714 val_acc=0.8826 best_val_acc=0.8730
+[phase3-full] epoch 4/10 train_loss=0.2397 train_acc=0.9447 val_loss=0.6503 val_acc=0.8812 best_val_acc=0.8826
+[phase3-full] epoch 5/10 train_loss=0.2142 train_acc=0.9522 val_loss=0.6559 val_acc=0.8854 best_val_acc=0.8826
+[phase3-full] epoch 6/10 train_loss=0.1813 train_acc=0.9641 val_loss=0.6600 val_acc=0.8904 best_val_acc=0.8854
+[phase3-full] epoch 7/10 train_loss=0.1621 train_acc=0.9696 val_loss=0.6848 val_acc=0.8883 best_val_acc=0.8904
+[phase3-full] epoch 8/10 train_loss=0.1546 train_acc=0.9730 val_loss=0.6675 val_acc=0.8936 best_val_acc=0.8904
+[phase3-full] epoch 9/10 train_loss=0.1487 train_acc=0.9740 val_loss=0.6600 val_acc=0.8939 best_val_acc=0.8936
+[phase3-full] epoch 10/10 train_loss=0.1430 train_acc=0.9775 val_loss=0.6627 val_acc=0.8925 best_val_acc=0.8939
+
+Best validation accuracy: 0.8939
+Best checkpoint saved to: /content/drive/MyDrive/signalwell-models/face_model_v7_best.pt
+Loaded best checkpoint. val_acc at save time: 0.893934019155729
+Split subject-independent: False
+
+TEST accuracy: 0.8805  |  test loss: 0.7061
+Macro precision: 0.7826
+Macro recall:    0.7826
+Macro F1:        0.7816
+              precision    recall  f1-score   support
+
+       anger     0.7965    0.8240    0.8100       551
+     disgust     0.5625    0.5760    0.5692       125
+        fear     0.5789    0.5000    0.5366        44
+   happiness     0.9573    0.9102    0.9332       813
+     neutral     0.9948    0.9974    0.9961       770
+     sadness     0.8135    0.7956    0.8045       318
+    surprise     0.7747    0.8750    0.8218       224
+
+    accuracy                         0.8805      2845
+   macro avg     0.7826    0.7826    0.7816      2845
+weighted avg     0.8827    0.8805    0.8811      2845
+
+
+
+Per-emotion accuracy (recall on that class):
+  anger     : 0.8240
+  disgust   : 0.5760
+  fear      : 0.5000
+  happiness : 0.9102
+  neutral   : 0.9974
+  sadness   : 0.7956
+  surprise  : 0.8750
+Checkpoint updated with test metrics at: /content/drive/MyDrive/signalwell-models/face_model_v7_best.pt
+{
+  "labels": [
+    "anger",
+    "disgust",
+    "fear",
+    "happiness",
+    "neutral",
+    "sadness",
+    "surprise"
+  ],
+  "class_to_idx": {
+    "anger": 0,
+    "disgust": 1,
+    "fear": 2,
+    "happiness": 3,
+    "neutral": 4,
+    "sadness": 5,
+    "surprise": 6
+  },
+  "val_acc": 0.893934019155729,
+  "preprocessing": {
+    "img_size": 160,
+    "norm_mean": [
+      0.5,
+      0.5,
+      0.5
+    ],
+    "norm_std": [
+      0.5,
+      0.5,
+      0.5
+    ],
+    "mtcnn_margin": 20,
+    "note": "Single normalization after a raw (post_process=False) MTCNN crop"
+  },
+  "split_is_subject_independent": false,
+  "test_acc": 0.8804920913884007,
+  "macro_f1": 0.7816107137060474,
+  "macro_precision": 0.7826106878282684,
+  "macro_recall": 0.7825950895145091,
+  "per_class_accuracy": {
+    "anger": 0.8239564428312159,
+    "disgust": 0.576,
+    "fear": 0.5,
+    "happiness": 0.9102091020910209,
+    "neutral": 0.9974025974025974,
+    "sadness": 0.7955974842767296,
+    "surprise": 0.875
+  }
+}

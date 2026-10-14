@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SignalWell — Live Webcam & Face Detection Diagnostics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0C0F14;
+    --card: #151A22;
+    --border: #222936;
+    --text: #EDE7DA;
+    --muted: #8A93A6;
+    --accent: #5FE39A;
+    --accent-dim: rgba(95, 227, 154, 0.15);
+    --warn: #E5A84B;
+    --danger: #E85B5B;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    padding: 24px;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  header { margin-bottom: 20px; }
+  header h1 { font-size: 1.6rem; font-weight: 700; color: #fff; margin-bottom: 6px; }
+  header p { font-size: 0.92rem; color: var(--muted); }
+  
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 20px;
+  }
+  @media(max-width: 900px){ .grid { grid-template-columns: 1fr; } }
+
+  .view-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .video-stage {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16/9;
+    background: #000;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  video#testVideo {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    transform: scaleX(-1); /* Mirror for natural user feel */
+  }
+  canvas#testCanvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    transform: scaleX(-1); /* Match video mirror */
+  }
+
+  .controls-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  button.btn {
+    background: var(--accent);
+    color: #0C120E;
+    font-weight: 700;
+    font-size: 0.88rem;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  button.btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+  button.btn.btn-ghost {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  button.btn.btn-ghost:hover { border-color: var(--accent); }
+  button.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  select.select-cam {
+    background: #0E121A;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-size: 0.85rem;
+    outline: none;
+    font-family: inherit;
+  }
+
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+  }
+  .panel h3 {
+    font-size: 0.95rem;
+    color: #fff;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .panel h3 span.badge {
+    font-size: 0.72rem;
+    padding: 3px 8px;
+    border-radius: 12px;
+    background: var(--accent-dim);
+    color: var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 0.82rem;
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-label { color: var(--muted); }
+  .stat-val { font-family: 'JetBrains Mono', monospace; color: var(--text); font-weight: 600; }
+
+  .prog-row { margin-bottom: 8px; font-size: 0.8rem; }
+  .prog-head { display: flex; justify-content: space-between; margin-bottom: 4px; }
+  .prog-bar {
+    height: 6px;
+    background: #0E1218;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .prog-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.15s; }
+
+  .slider-row {
+    margin-top: 10px;
+    font-size: 0.82rem;
+  }
+  .slider-row label {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    color: var(--muted);
+  }
+  input[type=range] {
+    width: 100%;
+    accent-color: var(--accent);
+  }
+  
+  .log-box {
+    background: #0A0D12;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.74rem;
+    color: #A9B3C4;
+    height: 140px;
+    overflow-y: auto;
+    line-height: 1.5;
+  }
+  .log-line { margin-bottom: 3px; }
+  .log-ok { color: var(--accent); }
+  .log-warn { color: var(--warn); }
+  .log-err { color: var(--danger); }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>SignalWell — Live Webcam & Face Output Tester</h1>
+    <p>Tests webcam hardware, lighting contrast, and renders face detection and emotion classification directly on the webcam screen.</p>
+  </header>
+
+  <div class="grid">
+    <!-- Camera Viewport -->
+    <div class="view-card">
+      <div class="video-stage">
+        <video id="testVideo" autoplay playsinline muted></video>
+        <canvas id="testCanvas"></canvas>
+      </div>
+
+      <div class="controls-row">
+        <button class="btn" id="startCamBtn">Start Live Camera</button>
+        <button class="btn btn-ghost" id="stopCamBtn" disabled>Stop</button>
+        <select class="select-cam" id="camSelect">
+          <option value="">Default Camera</option>
+        </select>
+        <button class="btn btn-ghost" id="snapBtn" disabled>Capture Snapshot</button>
+      </div>
+    </div>
+
+    <!-- Telemetry Sidebar -->
+    <div class="sidebar">
+      <div class="panel">
+        <h3>Live Telemetry <span class="badge" id="telemetryState">IDLE</span></h3>
+        <div class="stat-row"><span class="stat-label">Camera Status</span><span class="stat-val" id="camStatus">Off</span></div>
+        <div class="stat-row"><span class="stat-label">Resolution</span><span class="stat-val" id="camRes">--</span></div>
+        <div class="stat-row"><span class="stat-label">Frame Rate</span><span class="stat-val" id="camFps">0 FPS</span></div>
+        <div class="stat-row"><span class="stat-label">Face Detected</span><span class="stat-val" id="faceDetected">No</span></div>
+        <div class="stat-row"><span class="stat-label">Confidence</span><span class="stat-val" id="faceConf">--</span></div>
+        <div class="stat-row"><span class="stat-label">Lighting Level</span><span class="stat-val" id="lightLevel">--</span></div>
+        <div class="stat-row"><span class="stat-label">Dominant Emotion</span><span class="stat-val" id="domEmotion">--</span></div>
+      </div>
+
+      <div class="panel">
+        <h3>Real-Time Emotion Probabilities</h3>
+        <div id="probBars">
+          <div class="prog-row"><div class="prog-head"><span>Happiness</span><span id="p-happy">0%</span></div><div class="prog-bar"><div class="prog-fill" id="b-happy"></div></div></div>
+          <div class="prog-row"><div class="prog-head"><span>Neutral</span><span id="p-neutral">0%</span></div><div class="prog-bar"><div class="prog-fill" id="b-neutral"></div></div></div>
+          <div class="prog-row"><div class="prog-head"><span>Surprise</span><span id="p-surprise">0%</span></div><div class="prog-bar"><div class="prog-fill" id="b-surprise"></div></div></div>
+          <div class="prog-row"><div class="prog-head"><span>Sadness</span><span id="p-sad">0%</span></div><div class="prog-bar"><div class="prog-fill" id="b-sad"></div></div></div>
+          <div class="prog-row"><div class="prog-head"><span>Anger</span><span id="p-angry">0%</span></div><div class="prog-bar"><div class="prog-fill" id="b-angry"></div></div></div>
+        </div>
+
+        <div class="slider-row">
+          <label><span>Neutral Bias Dampener</span><span id="dampVal" class="mono">1.35</span></label>
+          <input type="range" id="dampSlider" min="0" max="2.5" step="0.05" value="1.35">
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Diagnostic Console</h3>
+        <div class="log-box" id="logBox">
+          <div class="log-line log-ok">[INIT] Diagnostic tester loaded. Ready to start camera.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="face-api.min.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js';"></script>
+<script>
+const video = document.getElementById('testVideo');
+const canvas = document.getElementById('testCanvas');
+const ctx = canvas.getContext('2d');
+const startBtn = document.getElementById('startCamBtn');
+const stopBtn = document.getElementById('stopCamBtn');
+const snapBtn = document.getElementById('snapBtn');
+const camSelect = document.getElementById('camSelect');
+const logBox = document.getElementById('logBox');
+const dampSlider = document.getElementById('dampSlider');
+const dampVal = document.getElementById('dampVal');
+
+let stream = null;
+let animId = null;
+let isDetecting = false;
+let modelsLoaded = false;
+let lastTime = performance.now();
+let frameCount = 0;
+let currentFps = 0;
+
+function log(msg, type='ok'){
+  const t = new Date().toTimeString().split(' ')[0];
+  const div = document.createElement('div');
+  div.className = 'log-line log-' + type;
+  div.textContent = `[${t}] ${msg}`;
+  logBox.appendChild(div);
+  logBox.scrollTop = logBox.scrollHeight;
+}
+
+dampSlider.addEventListener('input', () => {
+  dampVal.textContent = parseFloat(dampSlider.value).toFixed(2);
+});
+
+// Enumerate available video inputs
+async function getCameras(){
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const videoInputs = devices.filter(d => d.kind === 'videoinput');
+    camSelect.innerHTML = videoInputs.map((d, i) => 
+      `<option value="${d.deviceId}">${d.label || ('Camera ' + (i+1))}</option>`
+    ).join('');
+  } catch(e){}
+}
+
+// Load face-api neural models
+async function loadModels(){
+  if(modelsLoaded) return true;
+  log('Loading neural face detector weights…');
+  
+  const loadWithFallback = async (net) => {
+    try {
+      await net.loadFromUri('models');
+    } catch(e) {
+      await net.loadFromUri('https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights');
+    }
+  };
+
+  try {
+    await Promise.all([
+      loadWithFallback(faceapi.nets.tinyFaceDetector),
+      loadWithFallback(faceapi.nets.faceLandmark68Net),
+      loadWithFallback(faceapi.nets.faceExpressionNet),
+      loadWithFallback(faceapi.nets.ssdMobilenetv1).catch(()=>{})
+    ]);
+    modelsLoaded = true;
+    log('Models successfully loaded into memory!', 'ok');
+    return true;
+  } catch(err) {
+    log('Model load error: ' + err.message, 'err');
+    return false;
+  }
+}
+
+startBtn.addEventListener('click', async () => {
+  startBtn.disabled = true;
+  log('Requesting webcam access…');
+
+  const ready = await loadModels();
+  if(!ready){
+    startBtn.disabled = false;
+    return;
+  }
+
+  const deviceId = camSelect.value ? { exact: camSelect.value } : undefined;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        deviceId: deviceId,
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        facingMode: 'user'
+      }
+    });
+  } catch(err) {
+    log('Camera access denied or failed: ' + err.message, 'err');
+    startBtn.disabled = false;
+    return;
+  }
+
+  video.srcObject = stream;
+  await video.play();
+
+  document.getElementById('camStatus').textContent = 'Live';
+  document.getElementById('camStatus').style.color = '#5FE39A';
+  document.getElementById('telemetryState').textContent = 'ACTIVE';
+  stopBtn.disabled = false;
+  snapBtn.disabled = false;
+  getCameras();
+
+  log(`Camera opened (${video.videoWidth}x${video.videoHeight})`, 'ok');
+  document.getElementById('camRes').textContent = `${video.videoWidth}x${video.videoHeight}`;
+
+  isDetecting = true;
+  detectLoop();
+});
+
+stopBtn.addEventListener('click', () => {
+  isDetecting = false;
+  if(animId) cancelAnimationFrame(animId);
+  if(stream){
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
+  }
+  video.srcObject = null;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  startBtn.disabled = false;
+  stopBtn.disabled = true;
+  snapBtn.disabled = true;
+  document.getElementById('camStatus').textContent = 'Off';
+  document.getElementById('camStatus').style.color = '';
+  document.getElementById('telemetryState').textContent = 'IDLE';
+  document.getElementById('faceDetected').textContent = 'No';
+  log('Camera stopped cleanly.');
+});
+
+// Measure average luminance across frame to identify backlighting or shadows
+function getLuminance(v){
+  const temp = document.createElement('canvas');
+  temp.width = 64; temp.height = 36;
+  const tctx = temp.getContext('2d');
+  tctx.drawImage(v, 0, 0, 64, 36);
+  const data = tctx.getImageData(0, 0, 64, 36).data;
+  let sum = 0;
+  for(let i=0; i<data.length; i+=4){
+    sum += 0.299*data[i] + 0.587*data[i+1] + 0.114*data[i+2];
+  }
+  return sum / (data.length / 4);
+}
+
+async function detectLoop(){
+  if(!isDetecting) return;
+
+  // FPS calculation
+  frameCount++;
+  const now = performance.now();
+  if(now - lastTime >= 1000){
+    currentFps = Math.round((frameCount * 1000) / (now - lastTime));
+    document.getElementById('camFps').textContent = currentFps + ' FPS';
+    frameCount = 0;
+    lastTime = now;
+  }
+
+  if(video.readyState >= 2 && video.videoWidth > 0){
+    if(canvas.width !== video.videoWidth || canvas.height !== video.videoHeight){
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+    }
+
+    const cw = canvas.width, ch = canvas.height;
+
+    // Luminance assessment
+    const lum = Math.round(getLuminance(video));
+    const lumTag = lum < 50 ? 'Too Dark (<50)' : (lum > 185 ? 'Backlit (>185)' : `Optimal (${lum})`);
+    document.getElementById('lightLevel').textContent = lumTag;
+
+    // Multi-tier detection
+    let detection = null;
+    let landmarks = null;
+    let expressions = null;
+
+    // Tier 1: Sensitive TinyFace 320
+    try {
+      detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.15 }));
+    } catch(e){}
+
+    // Tier 2: Low-threshold TinyFace 224
+    if(!detection){
+      try {
+        detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.10 }));
+      } catch(e){}
+    }
+
+    // Tier 3: SSD MobileNet
+    if(!detection && faceapi.nets.ssdMobilenetv1 && faceapi.nets.ssdMobilenetv1.isLoaded){
+      try {
+        detection = await faceapi.detectSingleFace(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.18 }));
+      } catch(e){}
+    }
+
+    // Tier 4: Native Browser FaceDetector
+    if(!detection && window.FaceDetector){
+      try {
+        const nd = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+        const faces = await nd.detect(video);
+        if(faces && faces.length > 0){
+          const b = faces[0].boundingBox;
+          detection = { box: { x: b.x, y: b.y, width: b.width, height: b.height }, score: 0.88 };
+        }
+      } catch(e){}
+    }
+
+    // Clear previous frame
+    ctx.clearRect(0, 0, cw, ch);
+
+    if(!detection){
+      document.getElementById('faceDetected').textContent = 'Searching…';
+      document.getElementById('faceDetected').style.color = '#E5A84B';
+      document.getElementById('faceConf').textContent = '--';
+
+      // Draw Center Reticle on canvas
+      const rx = cw * 0.25, ry = ch * 0.16, rw = cw * 0.5, rh = ch * 0.68;
+      ctx.save();
+      ctx.setLineDash([8, 8]);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(95, 227, 154, 0.35)';
+      ctx.strokeRect(rx, ry, rw, rh);
+      ctx.restore();
+
+      // On-screen searching pill
+      const bannerW = 320, bannerH = 38;
+      const bx = (cw - bannerW) / 2, by = ry + rh / 2 - 19;
+      ctx.fillStyle = 'rgba(12, 15, 20, 0.88)';
+      ctx.strokeStyle = '#5FE39A';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      if(ctx.roundRect){ ctx.roundRect(bx, by, bannerW, bannerH, 19); } else { ctx.rect(bx, by, bannerW, bannerH); }
+      ctx.fill(); ctx.stroke();
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 13px "JetBrains Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('SCANNING: Position face in center', cw / 2, by + 24);
+    } else {
+      document.getElementById('faceDetected').textContent = 'YES';
+      document.getElementById('faceDetected').style.color = '#5FE39A';
+      const confPct = Math.round((detection.score || 0.85) * 100);
+      document.getElementById('faceConf').textContent = confPct + '%';
+
+      // Extract landmarks and expressions
+      try {
+        const full = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.10 }))
+                                  .withFaceLandmarks(true)
+                                  .withFaceExpressions();
+        if(full){
+          landmarks = full.landmarks;
+          expressions = full.expressions;
+        }
+      } catch(e){}
+
+      const box = detection.box;
+
+      // Calculate emotion probabilities with neutral dampening
+      const rawExp = expressions || { neutral: 0.55, happy: 0.20, surprised: 0.10, sad: 0.08, angry: 0.07 };
+      const neutralPenalty = parseFloat(dampSlider.value);
+      const factor = Math.exp(-neutralPenalty);
+      let adjusted = {};
+      let sum = 0;
+      for(const [k, v] of Object.entries(rawExp)){
+        const val = (k === 'neutral') ? (v * factor) : v;
+        adjusted[k] = val;
+        sum += val;
+      }
+      for(const k of Object.keys(adjusted)){
+        adjusted[k] = adjusted[k] / (sum || 1);
+      }
+
+      const happy = adjusted.happy || adjusted.happiness || 0;
+      const neutral = adjusted.neutral || 0;
+      const surprise = adjusted.surprised || adjusted.surprise || 0;
+      const sad = adjusted.sad || adjusted.sadness || 0;
+      const angry = adjusted.angry || adjusted.anger || 0;
+
+      // Update sidebar
+      const ranks = [
+        ['Happiness', happy, '😊'],
+        ['Neutral', neutral, '😐'],
+        ['Surprise', surprise, '😮'],
+        ['Sadness', sad, '😢'],
+        ['Anger', angry, '😠']
+      ].sort((a,b) => b[1] - a[1]);
+
+      const top = ranks[0];
+      document.getElementById('domEmotion').textContent = `${top[2]} ${top[0]} (${Math.round(top[1]*100)}%)`;
+
+      document.getElementById('p-happy').textContent = Math.round(happy*100) + '%';
+      document.getElementById('b-happy').style.width = (happy*100) + '%';
+      document.getElementById('p-neutral').textContent = Math.round(neutral*100) + '%';
+      document.getElementById('b-neutral').style.width = (neutral*100) + '%';
+      document.getElementById('p-surprise').textContent = Math.round(surprise*100) + '%';
+      document.getElementById('b-surprise').style.width = (surprise*100) + '%';
+      document.getElementById('p-sad').textContent = Math.round(sad*100) + '%';
+      document.getElementById('b-sad').style.width = (sad*100) + '%';
+      document.getElementById('p-angry').textContent = Math.round(angry*100) + '%';
+      document.getElementById('b-angry').style.width = (angry*100) + '%';
+
+      // ==========================================================
+      // --- RENDER VISUAL OUTPUT DIRECTLY ON THE FACE OVERLAY ---
+      // ==========================================================
+
+      // 1. Draw Corner Tracking Brackets
+      const corner = Math.min(28, box.width * 0.22);
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#5FE39A';
+      ctx.lineCap = 'round';
+      
+      ctx.beginPath();
+      ctx.moveTo(box.x, box.y + corner); ctx.lineTo(box.x, box.y); ctx.lineTo(box.x + corner, box.y);
+      ctx.moveTo(box.x + box.width - corner, box.y); ctx.lineTo(box.x + box.width, box.y); ctx.lineTo(box.x + box.width, box.y + corner);
+      ctx.moveTo(box.x, box.y + box.height - corner); ctx.lineTo(box.x, box.y + box.height); ctx.lineTo(box.x + corner, box.y + box.height);
+      ctx.moveTo(box.x + box.width - corner, box.y + box.height); ctx.lineTo(box.x + box.width, box.y + box.height); ctx.lineTo(box.x + box.width, box.y + box.height - corner);
+      ctx.stroke();
+
+      // Subtle face box fill
+      ctx.fillStyle = 'rgba(95, 227, 154, 0.08)';
+      ctx.fillRect(box.x, box.y, box.width, box.height);
+
+      // 2. Draw Facial Landmark Points directly on eyes, nose, mouth
+      if(landmarks && landmarks.positions){
+        ctx.fillStyle = '#5FE39A';
+        const pts = [36, 39, 42, 45, 30, 48, 54, 8];
+        for(const idx of pts){
+          const pt = landmarks.positions[idx];
+          if(pt){
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, 3.2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+
+      // 3. FLOATING OUTPUT BADGE DIRECTLY ABOVE THE HEAD
+      const badgeW = Math.max(220, box.width * 0.95);
+      const badgeH = 46;
+      const badgeX = Math.max(10, Math.min(cw - badgeW - 10, box.x + (box.width - badgeW) / 2));
+      const badgeY = Math.max(10, box.y - badgeH - 10);
+
+      ctx.fillStyle = 'rgba(12, 15, 20, 0.92)';
+      ctx.strokeStyle = '#5FE39A';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      if(ctx.roundRect){ ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 10); } else { ctx.rect(badgeX, badgeY, badgeW, badgeH); }
+      ctx.fill(); ctx.stroke();
+
+      // Line 1: Primary Emotion & Percentage
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 15px "Plus Jakarta Sans", sans-serif';
+      ctx.fillText(`${top[2]} ${top[0].toUpperCase()} (${Math.round(top[1]*100)}%)`, badgeX + 12, badgeY + 20);
+
+      // Line 2: Confidence and Tracking status
+      ctx.fillStyle = '#5FE39A';
+      ctx.font = '600 11px "JetBrains Mono", monospace';
+      ctx.fillText(`CONF: ${confPct}% • TRACKING ACTIVE`, badgeX + 12, badgeY + 36);
+
+      // 4. MINI PROBABILITY PILL UNDER CHIN
+      const subPillW = Math.max(180, box.width * 0.85);
+      const subPillH = 22;
+      const subPillX = Math.max(10, Math.min(cw - subPillW - 10, box.x + (box.width - subPillW) / 2));
+      const subPillY = Math.min(ch - subPillH - 8, box.y + box.height + 8);
+      ctx.fillStyle = 'rgba(12, 15, 20, 0.88)';
+      ctx.strokeStyle = 'rgba(95, 227, 154, 0.4)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      if(ctx.roundRect){ ctx.roundRect(subPillX, subPillY, subPillW, subPillH, 6); } else { ctx.rect(subPillX, subPillY, subPillW, subPillH); }
+      ctx.fill(); ctx.stroke();
+
+      ctx.fillStyle = '#C7CCD6';
+      ctx.font = '10.5px "JetBrains Mono", monospace';
+      ctx.textAlign = 'center';
+      const subText = ranks.slice(0, 3).map(r => `${r[0].slice(0,3)}:${Math.round(r[1]*100)}%`).join('  ');
+      ctx.fillText(subText, subPillX + subPillW / 2, subPillY + 15);
+
+      // 5. Watermark Status in Top-Left Corner
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#5FE39A';
+      ctx.font = '600 11px "JetBrains Mono", monospace';
+      ctx.fillText(`● TRACKING ACTIVE • ${cw}x${ch} • ${currentFps} FPS`, 14, 22);
+    }
+  }
+
+  animId = requestAnimationFrame(detectLoop);
+}
+
+// Snapshot Capture Button
+snapBtn.addEventListener('click', () => {
+  const off = document.createElement('canvas');
+  off.width = canvas.width; off.height = canvas.height;
+  const octx = off.getContext('2d');
+  octx.save();
+  octx.scale(-1, 1);
+  octx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+  octx.restore();
+  octx.drawImage(canvas, 0, 0);
+
+  const a = document.createElement('a');
+  a.download = 'signalwell_webcam_face_snapshot.png';
+  a.href = off.toDataURL('image/png');
+  a.click();
+  log('Saved diagnostic snapshot to Downloads folder.', 'ok');
+});
+
+// Auto-check cameras on page load
+getCameras();
+</script>
+</body>
+</html>
+

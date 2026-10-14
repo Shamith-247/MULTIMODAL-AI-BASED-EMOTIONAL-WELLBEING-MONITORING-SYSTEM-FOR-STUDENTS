@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SignalWell — Multimodal Student Wellbeing Console</title>
+<meta name="description" content="An open-source, on-device multimodal wellbeing monitor for students: facial expression, voice tone, journal text, and behavior fused into one signal.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --ink:#10131A;
+    --fog:#1B2029;
+    --fog-2:#232936;
+    --hair:#2E3542;
+    --bone:#EDE7DA;
+    --bone-dim:#B9B2A0;
+    --moss:#8FA377;
+    --moss-dim:#5E6E4C;
+    --ember:#D98B4A;
+    --rust:#B85450;
+    --mist:#8A93A6;
+    --mist-dim:#4E5567;
+    --radius:10px;
+    --shadow: 0 20px 60px -30px rgba(0,0,0,0.6);
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:var(--ink);
+    color:var(--bone);
+    font-family:'Inter',sans-serif;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{
+    font-family:'Fraunces',serif;
+    font-weight:600;
+    margin:0 0 .4em 0;
+    letter-spacing:-0.01em;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  a{color:var(--moss);}
+  button{
+    font-family:'Inter',sans-serif;
+    cursor:pointer;
+  }
+  button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible{
+    outline:2px solid var(--moss);
+    outline-offset:2px;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:0 28px;}
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:.72rem;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--mist);
+    margin-bottom:.6em;
+    display:block;
+  }
+
+  /* ===== Console header ===== */
+  .console-header{
+    position:sticky; top:0; z-index:50;
+    background:rgba(16,19,26,0.86);
+    backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--hair);
+  }
+  .console-header .wrap{
+    display:flex; align-items:center; justify-content:space-between;
+    height:64px;
+  }
+  .brand{display:flex; align-items:center; gap:10px; font-family:'IBM Plex Mono',monospace; font-weight:600; letter-spacing:.02em;}
+  .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--moss); box-shadow:0 0 0 3px rgba(143,163,119,.18);}
+  .console-header nav{display:flex; gap:22px;}
+  .console-header nav a{
+    color:var(--mist); text-decoration:none; font-size:.86rem;
+  }
+  .console-header nav a:hover{color:var(--bone);}
+
+  /* ===== Hero ===== */
+  .hero{padding:86px 0 60px;}
+  .hero .wrap{display:grid; grid-template-columns:1.1fr .9fr; gap:56px; align-items:center;}
+  .hero h1{font-size:clamp(2.1rem,4vw,3.2rem); line-height:1.06;}
+  .hero h1 em{font-style:normal; color:var(--moss);}
+  .hero p.lede{color:var(--mist); font-size:1.05rem; max-width:46ch;}
+  .hero .cta-row{display:flex; gap:14px; margin-top:26px; flex-wrap:wrap;}
+  .btn{
+    border-radius:8px; padding:11px 20px; font-size:.92rem; font-weight:600; border:1px solid transparent;
+  }
+  .btn-primary{background:var(--moss); color:#12160E;}
+  .btn-primary:hover{background:#9FB489;}
+  .btn-ghost{background:transparent; color:var(--bone); border-color:var(--hair);}
+  .btn-ghost:hover{border-color:var(--mist);}
+
+  /* signature convergence visual */
+  .signal-scope{
+    background:var(--fog); border:1px solid var(--hair); border-radius:14px;
+    padding:22px; box-shadow:var(--shadow);
+  }
+  .signal-scope .scope-label{display:flex; justify-content:space-between; margin-bottom:10px;}
+  .signal-scope svg{width:100%; height:auto; display:block;}
+  .scope-line{fill:none; stroke-width:2; opacity:.85;}
+  @media (prefers-reduced-motion: no-preference){
+    .scope-anim{ animation: dash 6s linear infinite; }
+    @keyframes dash{ to{ stroke-dashoffset:-400; } }
+  }
+
+  /* ===== Section shell ===== */
+  .section{padding:64px 0; border-top:1px solid var(--hair);}
+  .section-head{display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:34px; gap:20px; flex-wrap:wrap;}
+  .section-head h2{font-size:1.6rem;}
+  .section-note{color:var(--mist); max-width:56ch; font-size:.94rem;}
+
+  /* ===== Mixer ===== */
+  .mixer-grid{
+    display:grid; grid-template-columns:repeat(4,1fr) 1.15fr; gap:16px; align-items:stretch;
+  }
+  @media (max-width:980px){ .mixer-grid{grid-template-columns:1fr 1fr;} }
+  @media (max-width:560px){ .mixer-grid{grid-template-columns:1fr;} }
+
+  .strip{
+    background:var(--fog); border:1px solid var(--hair); border-radius:12px;
+    padding:16px; display:flex; flex-direction:column; gap:12px; min-height:340px;
+  }
+  .strip-head{
+    font-family:'IBM Plex Mono',monospace; font-size:.72rem; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--mist); display:flex; justify-content:space-between;
+  }
+  .strip-head .lit{color:var(--moss);}
+  .meter-track{
+    flex:1; background:var(--ink); border-radius:8px; position:relative; overflow:hidden;
+    border:1px solid var(--hair); min-height:150px;
+  }
+  .meter-fill{
+    position:absolute; left:0; right:0; bottom:0; background:linear-gradient(180deg,var(--ember),var(--moss));
+    height:0%; transition:height .5s ease;
+  }
+  .meter-ticks{position:absolute; inset:0; display:flex; flex-direction:column; justify-content:space-between; padding:6px 0;}
+  .meter-ticks span{height:1px; background:rgba(255,255,255,.06); margin:0 8px;}
+  .strip-value{font-family:'IBM Plex Mono',monospace; font-size:1.5rem; text-align:center;}
+  .strip-sub{font-size:.78rem; color:var(--mist-dim); text-align:center; min-height:1.4em;}
+  .strip-ctl{display:flex; gap:8px;}
+  .mini-btn{
+    flex:1; background:var(--fog-2); color:var(--bone); border:1px solid var(--hair);
+    border-radius:7px; padding:8px 6px; font-size:.78rem; font-weight:600;
+  }
+  .mini-btn:hover{border-color:var(--moss);}
+  .mini-btn[aria-pressed="true"]{background:var(--moss); color:#12160E; border-color:var(--moss);}
+  video.cam-preview{width:100%; border-radius:8px; background:#000; display:block; aspect-ratio:4/3; object-fit:cover;}
+  textarea.journal-input{
+    width:100%; background:var(--ink); border:1px solid var(--hair); border-radius:8px; color:var(--bone);
+    padding:10px; font-family:'Inter',sans-serif; font-size:.86rem; resize:vertical; min-height:80px;
+  }
+  .behavior-stats{display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:.78rem; color:var(--mist);}
+  .behavior-stats b{color:var(--bone); display:block; font-family:'IBM Plex Mono',monospace; font-size:.95rem;}
+
+  /* Master strip */
+  .master-strip{
+    background:var(--fog-2); border:1px solid var(--moss-dim);
+  }
+  .master-value{font-family:'IBM Plex Mono',monospace; font-size:2.4rem; text-align:center;}
+  .master-tag{
+    text-align:center; font-size:.82rem; font-weight:600; letter-spacing:.04em; text-transform:uppercase;
+    padding:6px 10px; border-radius:20px; margin:0 auto; width:fit-content;
+  }
+  .tag-thrive{background:rgba(143,163,119,.18); color:var(--moss);}
+  .tag-steady{background:rgba(138,147,166,.18); color:var(--mist);}
+  .tag-strain{background:rgba(217,139,74,.18); color:var(--ember);}
+  .tag-risk{background:rgba(184,84,80,.2); color:var(--rust);}
+
+  /* Aux sends */
+  .aux-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:20px;}
+  @media (max-width:760px){ .aux-grid{grid-template-columns:1fr;} }
+  .aux-card{background:var(--fog); border:1px solid var(--hair); border-radius:12px; padding:18px;}
+  .aux-card label{display:flex; justify-content:space-between; font-size:.86rem; margin-bottom:8px;}
+  .aux-card input[type=range]{width:100%; accent-color:var(--moss);}
+  .aux-card .aux-val{font-family:'IBM Plex Mono',monospace; color:var(--moss);}
+  .aux-toggle{display:flex; align-items:center; gap:8px; margin-top:10px; font-size:.78rem; color:var(--mist);}
+
+  /* Trend + history */
+  .trend-panel{background:var(--fog); border:1px solid var(--hair); border-radius:12px; padding:22px;}
+  .trend-actions{display:flex; gap:10px; margin-top:16px;}
+
+  /* Alert banner */
+  .support-banner{
+    display:none; border:1px solid var(--rust); background:rgba(184,84,80,.1); border-radius:12px;
+    padding:18px 20px; margin-bottom:26px; gap:14px;
+  }
+  .support-banner.show{display:flex;}
+  .support-banner h3{margin:0 0 4px; font-size:1.05rem; color:var(--rust);}
+
+  /* Resource / ethics cards */
+  .card-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:20px;}
+  @media (max-width:760px){ .card-grid{grid-template-columns:1fr;} }
+  .info-card{background:var(--fog); border:1px solid var(--hair); border-radius:12px; padding:22px;}
+  .info-card h3{font-size:1.05rem; margin-bottom:10px;}
+  .info-card p, .info-card li{color:var(--mist); font-size:.92rem;}
+  .info-card ul{padding-left:20px; margin:0;}
+
+  .stack-table{width:100%; border-collapse:collapse; font-size:.88rem;}
+  .stack-table th, .stack-table td{text-align:left; padding:10px 8px; border-bottom:1px solid var(--hair); color:var(--mist);}
+  .stack-table th{color:var(--bone); font-family:'IBM Plex Mono',monospace; font-size:.72rem; text-transform:uppercase; letter-spacing:.06em;}
+  .stack-table td:first-child, .stack-table th:first-child{color:var(--bone);}
+
+  footer{padding:40px 0; border-top:1px solid var(--hair); color:var(--mist-dim); font-size:.82rem;}
+  .status-line{font-family:'IBM Plex Mono',monospace; font-size:.74rem; color:var(--mist-dim); margin-top:6px;}
+
+  /* ===== Sign-in gate ===== */
+  .gate{
+    position:fixed; inset:0; z-index:200; background:var(--ink);
+    display:flex; align-items:center; justify-content:center; padding:24px;
+  }
+  .gate-card{
+    max-width:420px; width:100%; background:var(--fog); border:1px solid var(--hair);
+    border-radius:14px; padding:32px; box-shadow:var(--shadow);
+  }
+  .gate-card h2{font-size:1.4rem; margin-bottom:8px;}
+  .gate-card p{color:var(--mist); font-size:.9rem; margin-bottom:20px;}
+  .gate-card label{display:block; font-size:.82rem; color:var(--mist); margin-bottom:6px;}
+  .gate-card input[type=text]{
+    width:100%; background:var(--ink); border:1px solid var(--hair); border-radius:8px;
+    color:var(--bone); padding:11px 12px; font-size:.94rem; margin-bottom:16px;
+  }
+  .gate-consent{display:flex; gap:10px; align-items:flex-start; font-size:.82rem; color:var(--mist); margin-bottom:20px;}
+  .gate-consent input{margin-top:3px;}
+  .gate-error{color:var(--rust); font-size:.82rem; margin:-10px 0 14px; display:none;}
+  #appRoot{display:none;}
+
+  /* ===== Session control (pause) ===== */
+  .session-ctl{display:flex; align-items:center; gap:14px;}
+  .session-status{font-family:'IBM Plex Mono',monospace; font-size:.78rem; color:var(--mist);}
+  .session-status .dot-live{color:var(--moss);}
+  .session-status .dot-paused{color:var(--ember);}
+  .pause-btn{
+    background:var(--fog-2); color:var(--bone); border:1px solid var(--hair);
+    border-radius:7px; padding:8px 16px; font-size:.82rem; font-weight:600;
+  }
+  .pause-btn:hover{border-color:var(--moss);}
+  .pause-btn.is-paused{background:var(--ember); color:#241505; border-color:var(--ember);}
+  .paused-overlay{
+    position:absolute; inset:0; background:rgba(16,19,26,.72); display:none;
+    align-items:center; justify-content:center; border-radius:12px; z-index:5;
+    font-family:'IBM Plex Mono',monospace; font-size:.8rem; color:var(--ember); text-align:center; padding:12px;
+  }
+  .strip{position:relative;}
+
+  /* ===== Welcome toast ===== */
+  .welcome-toast{
+    position:fixed; top:18px; left:50%; transform:translateX(-50%) translateY(-14px);
+    z-index:150; background:var(--fog-2); border:1px solid var(--moss-dim); color:var(--bone);
+    padding:12px 22px; border-radius:30px; font-family:'IBM Plex Mono',monospace; font-size:.86rem;
+    box-shadow:var(--shadow); opacity:0; pointer-events:none; transition:opacity .5s ease, transform .5s ease;
+  }
+  .welcome-toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+  .welcome-toast .dot{color:var(--moss);}
+
+  /* ===== Cancel button ===== */
+  .cancel-btn{
+    background:transparent; color:var(--rust); border:1px solid var(--rust);
+    border-radius:7px; padding:8px 16px; font-size:.82rem; font-weight:600;
+  }
+  .cancel-btn:hover{background:rgba(184,84,80,.14);}
+
+  /* ===== Face overlay ===== */
+  .face-wrap{position:relative;}
+  .face-wrap canvas{position:absolute; inset:0; width:100%; height:100%; pointer-events:none;}
+  .expr-bars{display:flex; gap:4px; align-items:flex-end; height:34px;}
+  .expr-bars .bar{flex:1; background:var(--hair); border-radius:2px 2px 0 0; position:relative; display:flex; align-items:flex-end;}
+  .expr-bars .bar i{display:block; width:100%; background:var(--moss); border-radius:2px 2px 0 0; transition:height .4s ease;}
+  .expr-bars .bar span{position:absolute; bottom:-16px; left:0; right:0; text-align:center; font-size:.58rem; color:var(--mist-dim); font-family:'IBM Plex Mono',monospace;}
+
+  /* ===== Voice waveform ===== */
+  .voice-wave{width:100%; height:60px; border-radius:8px; background:var(--ink); border:1px solid var(--hair); display:block;}
+
+  /* ===== Mood chip (live text preview) ===== */
+  .mood-chip{
+    display:inline-flex; align-items:center; gap:6px; font-size:.74rem; font-family:'IBM Plex Mono',monospace;
+    color:var(--mist); padding:4px 10px; border:1px solid var(--hair); border-radius:20px; width:fit-content;
+  }
+  .mood-chip .dot{width:7px;height:7px;border-radius:50%; background:var(--mist);}
+
+  /* ===== Breathing pulse ring on master ===== */
+  .pulse-wrap{position:relative; display:flex; align-items:center; justify-content:center; margin-bottom:4px;}
+  .pulse-ring{
+    width:14px; height:14px; border-radius:50%; background:var(--moss);
+    box-shadow:0 0 0 0 rgba(143,163,119,.5);
+    animation:breathe 4s ease-in-out infinite;
+  }
+  @keyframes breathe{
+    0%{ box-shadow:0 0 0 0 rgba(143,163,119,.5); transform:scale(1); }
+    50%{ box-shadow:0 0 0 14px rgba(143,163,119,0); transform:scale(1.3); }
+    100%{ box-shadow:0 0 0 0 rgba(143,163,119,0); transform:scale(1); }
+  }
+
+  /* ===== Contribution bars ===== */
+  .contrib{display:flex; flex-direction:column; gap:6px; margin-top:4px;}
+  .contrib-row{display:flex; align-items:center; gap:8px; font-size:.68rem; color:var(--mist); font-family:'IBM Plex Mono',monospace;}
+  .contrib-row .label{width:52px; flex:none;}
+  .contrib-track{flex:1; height:5px; background:var(--ink); border-radius:4px; overflow:hidden; border:1px solid var(--hair);}
+  .contrib-fill{height:100%; background:var(--moss); width:0%; transition:width .5s ease;}
+</style>
+</head>
+<body>
+
+<div class="welcome-toast" id="welcomeToast"></div>
+
+<div class="gate" id="gate">
+  <div class="gate-card">
+    <span class="eyebrow">Before you begin</span>
+    <h2>Sign in to your session</h2>
+    <p>SignalWell will ask to use your camera and microphone once you enable those channels. Nothing leaves this browser tab.</p>
+    <label for="gateName">Your name</label>
+    <input type="text" id="gateName" placeholder="e.g. Shamith" autocomplete="off">
+    <div class="gate-error" id="gateError">Please enter your name to continue.</div>
+    <div class="gate-consent">
+      <input type="checkbox" id="gateConsent">
+      <label for="gateConsent" style="margin:0;">I understand this is a screening prototype, not a diagnostic tool, and I consent to on-device analysis of my camera/mic/text during this session.</label>
+    </div>
+    <button class="btn btn-primary" style="width:100%;" id="gateSubmit">Begin session</button>
+  </div>
+</div>
+
+<div id="appRoot">
+
+<header class="console-header">
+  <div class="wrap">
+    <div class="brand"><span class="dot"></span> SIGNALWELL</div>
+    <nav>
+      <a href="#mixer">Console</a>
+      <a href="#aux">Context</a>
+      <a href="#trend">Trend</a>
+      <a href="#support">Support</a>
+      <a href="#stack">Model Stack</a>
+    </nav>
+    <div class="session-ctl">
+      <span class="session-status" id="sessionStatus"><span class="dot-live">●</span> <span id="signedInAs"></span></span>
+      <button class="pause-btn" id="pauseBtn" aria-pressed="false">Pause session</button>
+      <button class="cancel-btn" id="cancelBtn">Cancel session</button>
+    </div>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <span class="eyebrow">Multimodal wellbeing monitoring · student project</span>
+      <h1>Four quiet signals.<br><em>One honest reading.</em></h1>
+      <p class="lede">SignalWell listens to what a student's face, voice, words, and habits are already saying — and fuses them into a single wellbeing reading, computed entirely on-device with open-source models. Nothing here is a diagnosis. It's an early, gentle signal to check in.</p>
+      <div class="cta-row">
+        <button class="btn btn-primary" onclick="document.getElementById('mixer').scrollIntoView({behavior:'smooth'})">Open the console</button>
+        <a class="btn btn-ghost" href="#stack">See the model stack</a>
+      </div>
+    </div>
+    <div class="signal-scope">
+      <div class="scope-label">
+        <span class="eyebrow" style="margin:0;">Live fusion</span>
+        <span class="eyebrow" style="margin:0;">4 → 1</span>
+      </div>
+      <svg viewBox="0 0 400 220">
+        <polyline class="scope-line scope-anim" stroke="#8FA377" stroke-dasharray="6 6" points="10,40 120,40 200,110 380,110"/>
+        <polyline class="scope-line scope-anim" stroke="#D98B4A" stroke-dasharray="6 6" points="10,80 120,80 200,110 380,110"/>
+        <polyline class="scope-line scope-anim" stroke="#8A93A6" stroke-dasharray="6 6" points="10,140 120,140 200,110 380,110"/>
+        <polyline class="scope-line scope-anim" stroke="#B85450" stroke-dasharray="6 6" points="10,180 120,180 200,110 380,110"/>
+        <circle cx="200" cy="110" r="4" fill="#EDE7DA"/>
+        <polyline class="scope-line" stroke="#EDE7DA" stroke-width="3" points="200,110 380,110"/>
+        <text x="14" y="32" fill="#8FA377" font-size="11" font-family="IBM Plex Mono">face</text>
+        <text x="14" y="72" fill="#D98B4A" font-size="11" font-family="IBM Plex Mono">voice</text>
+        <text x="14" y="132" fill="#8A93A6" font-size="11" font-family="IBM Plex Mono">text</text>
+        <text x="14" y="172" fill="#B85450" font-size="11" font-family="IBM Plex Mono">behavior</text>
+        <text x="330" y="100" fill="#EDE7DA" font-size="11" font-family="IBM Plex Mono">out</text>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="mixer">
+  <div class="wrap">
+    <div class="section-head">
+      <div>
+        <span class="eyebrow">The console</span>
+        <h2>Every channel is live and on-device</h2>
+      </div>
+      <p class="section-note">Enable each channel you want to test. Camera and microphone frames never leave this browser tab — inference runs locally with the open-source models listed below.</p>
+    </div>
+
+    <div id="supportBanner" class="support-banner">
+      <div>
+        <h3>The reading has stayed low for a while</h3>
+        <p style="margin:0;color:var(--mist);font-size:.9rem;">This isn't a diagnosis — but a stretch of low readings is a good reason to talk to someone. See <a href="#support">Support &amp; resources</a> below.</p>
+      </div>
+    </div>
+
+    <div class="mixer-grid">
+
+      <!-- FACE -->
+      <div class="strip" data-strip="face">
+        <div class="paused-overlay" id="pausedFace">Session paused</div>
+        <div class="strip-head"><span>Ch.1 — Face</span><span class="lit" id="faceLit"></span></div>
+        <div class="face-wrap">
+          <video id="faceVideo" class="cam-preview" autoplay muted playsinline></video>
+          <canvas id="faceCanvas"></canvas>
+        </div>
+        <div class="expr-bars" id="exprBars">
+          <div class="bar"><i id="bar-happy" style="height:0%"></i><span>happy</span></div>
+          <div class="bar"><i id="bar-sad" style="height:0%"></i><span>sad</span></div>
+          <div class="bar"><i id="bar-angry" style="height:0%"></i><span>angry</span></div>
+          <div class="bar"><i id="bar-surprised" style="height:0%"></i><span>surp.</span></div>
+          <div class="bar"><i id="bar-neutral" style="height:0%"></i><span>neutral</span></div>
+        </div>
+        <div class="strip-ctl" style="margin-top:14px;">
+          <button class="mini-btn" id="faceToggle" aria-pressed="false">Enable camera</button>
+        </div>
+        <div class="strip-value" id="faceValue">--</div>
+        <div class="strip-sub" id="faceSub">Loads TinyFaceDetector + expression model on start</div>
+      </div>
+
+      <!-- VOICE -->
+      <div class="strip" data-strip="voice">
+        <div class="paused-overlay" id="pausedVoice">Session paused</div>
+        <div class="strip-head"><span>Ch.2 — Voice</span><span class="lit" id="voiceLit"></span></div>
+        <canvas id="voiceWave" class="voice-wave"></canvas>
+        <div class="meter-track" style="min-height:70px;"><div class="meter-fill" id="voiceMeterFill"></div>
+          <div class="meter-ticks"><span></span><span></span><span></span><span></span></div>
+        </div>
+        <div class="strip-ctl">
+          <button class="mini-btn" id="voiceToggle" aria-pressed="false">Enable mic</button>
+        </div>
+        <div class="strip-value" id="voiceValue">--</div>
+        <div class="strip-sub" id="voiceSub">Energy / pitch-variance proxy, not a trained SER model</div>
+      </div>
+
+      <!-- TEXT -->
+      <div class="strip" data-strip="text">
+        <div class="paused-overlay" id="pausedText">Session paused</div>
+        <div class="strip-head"><span>Ch.3 — Journal</span><span class="lit" id="textLit"></span></div>
+        <textarea id="journalInput" class="journal-input" placeholder="Write a line about your day…"></textarea>
+        <div class="mood-chip" id="moodChip"><span class="dot"></span> <span id="moodChipText">Start typing…</span></div>
+        <div class="strip-ctl">
+          <button class="mini-btn" id="textAnalyzeBtn">Analyze entry</button>
+        </div>
+        <div class="strip-value" id="textValue">--</div>
+        <div class="strip-sub" id="textSub">DistilBERT sentiment, running via transformers.js</div>
+      </div>
+
+      <!-- BEHAVIOR -->
+      <div class="strip" data-strip="behavior">
+        <div class="paused-overlay" id="pausedBehavior">Session paused</div>
+        <div class="strip-head"><span>Ch.4 — Behavior</span><span class="lit" id="behaviorLit">●</span></div>
+        <div class="behavior-stats">
+          <div>Session time<b id="statSession">0:00</b></div>
+          <div>Entries logged<b id="statEntries">0</b></div>
+          <div>Typing rhythm<b id="statRhythm">--</b></div>
+          <div>Late-night use<b id="statLateNight">0</b></div>
+        </div>
+        <div class="strip-value" id="behaviorValue">--</div>
+        <div class="strip-sub">Tracked passively this session, no camera/mic needed</div>
+      </div>
+
+      <!-- MASTER -->
+      <div class="strip master-strip" data-strip="master">
+        <div class="strip-head"><span>Master output</span><span class="lit">Σ</span></div>
+        <div class="meter-track"><div class="meter-fill" id="masterMeterFill"></div>
+          <div class="meter-ticks"><span></span><span></span><span></span><span></span></div>
+        </div>
+        <div class="master-value" id="masterValue">50</div>
+        <div class="master-tag tag-steady" id="masterTag">Steady</div>
+        <div class="strip-sub">Weighted fusion of every active channel</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section class="section" id="aux">
+  <div class="wrap">
+    <div class="section-head">
+      <div>
+        <span class="eyebrow">Optional context</span>
+        <h2>Sleep, activity &amp; academic load</h2>
+      </div>
+      <p class="section-note">These are self-reported and carry a smaller weight in the fusion — enable only the ones you want counted.</p>
+    </div>
+    <div class="aux-grid">
+      <div class="aux-card">
+        <label><span>Sleep last night</span><span class="aux-val"><span id="sleepVal">7</span>h</span></label>
+        <input type="range" id="sleepSlider" min="0" max="12" value="7">
+        <div class="aux-toggle"><input type="checkbox" id="sleepInclude"> Include in master reading</div>
+      </div>
+      <div class="aux-card">
+        <label><span>Physical activity today</span><span class="aux-val"><span id="activityVal">20</span> min</span></label>
+        <input type="range" id="activitySlider" min="0" max="120" value="20">
+        <div class="aux-toggle"><input type="checkbox" id="activityInclude"> Include in master reading</div>
+      </div>
+      <div class="aux-card">
+        <label><span>Academic pressure felt</span><span class="aux-val"><span id="academicVal">5</span>/10</span></label>
+        <input type="range" id="academicSlider" min="1" max="10" value="5">
+        <div class="aux-toggle"><input type="checkbox" id="academicInclude"> Include in master reading</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="trend">
+  <div class="wrap">
+    <div class="section-head">
+      <div>
+        <span class="eyebrow">Over time</span>
+        <h2>Trend, not a single snapshot</h2>
+      </div>
+      <p class="section-note">One reading means little. Log a snapshot whenever you check in and watch the shape of the line — that's the actual signal.</p>
+    </div>
+    <div class="trend-panel">
+      <canvas id="trendChart" height="90"></canvas>
+      <div class="trend-actions">
+        <button class="mini-btn" id="logSnapshotBtn" style="flex:0 0 auto;padding:10px 18px;">Log current reading</button>
+        <button class="mini-btn" id="clearHistoryBtn" style="flex:0 0 auto;padding:10px 18px;">Clear history</button>
+      </div>
+      <div class="status-line" id="historyStatus">No snapshots logged yet — stored locally in this browser only.</div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="support">
+  <div class="wrap">
+    <div class="section-head">
+      <div>
+        <span class="eyebrow">If a reading is low</span>
+        <h2>Support &amp; resources</h2>
+      </div>
+      <p class="section-note">Swap these for your own campus counseling center details before deploying. Keep this section visible at all times, not just when the score drops.</p>
+    </div>
+    <div class="card-grid">
+      <div class="info-card">
+        <h3>Talk to someone now</h3>
+        <ul>
+          <li>India — Kiran Mental Health Helpline: 1800-599-0019 (24/7, toll-free, multilingual)</li>
+          <li>India — iCall (TISS): 9152987821, Mon–Sat</li>
+          <li>Outside India: search "[your country] mental health helpline" or use <a href="https://findahelpline.com" target="_blank" rel="noopener">findahelpline.com</a></li>
+          <li>Your institution's counseling center — add the direct line here</li>
+        </ul>
+      </div>
+      <div class="info-card">
+        <h3>What this tool is — and isn't</h3>
+        <p>SignalWell is a screening aid built for a student project. It estimates a mood signal from expression, voice, text and habits. It does not diagnose anxiety, depression, or any clinical condition, and a low reading is a prompt to reach out to a person, not a verdict.</p>
+        <p>Any real deployment on a campus should sit behind informed consent, a named counselor in the loop, and ethics review — many users will be minors.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="stack">
+  <div class="wrap">
+    <div class="section-head">
+      <div>
+        <span class="eyebrow">Under the hood</span>
+        <h2>Open-source model stack</h2>
+      </div>
+      <p class="section-note">Everything below runs in-browser via WebGL/WASM. No server, no API key, no data leaving the device in this prototype.</p>
+    </div>
+    <table class="stack-table">
+      <thead><tr><th>Channel</th><th>Model</th><th>Library</th><th>License</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Face</td><td>TinyFaceDetector + Face Expression Net</td><td>face-api.js (TensorFlow.js)</td><td>MIT</td><td>7-way expression probabilities → valence score</td></tr>
+        <tr><td>Text</td><td>DistilBERT SST-2 (Xenova ONNX build)</td><td>transformers.js</td><td>Apache-2.0</td><td>Runs the HF sentiment-analysis pipeline fully client-side</td></tr>
+        <tr><td>Voice</td><td>Heuristic: RMS energy + zero-crossing rate</td><td>Web Audio API</td><td>Browser-native</td><td>Placeholder — swap for an open SER model (e.g. a wav2vec2 emotion checkpoint via transformers.js audio-classification) for production accuracy</td></tr>
+        <tr><td>Behavior</td><td>Rule-based session &amp; timing features</td><td>Vanilla JS</td><td>—</td><td>Session length, entry frequency, typing-rhythm variance, late-night usage ratio</td></tr>
+        <tr><td>Trend</td><td>Chart.js line chart over locally stored snapshots</td><td>Chart.js</td><td>MIT</td><td>History lives in this browser's localStorage only</td></tr>
+      </tbody>
+    </table>
+    <p class="section-note" style="margin-top:18px;">For a production/report-ready pipeline, the natural next step is moving voice to a proper open-source speech-emotion-recognition model (e.g. a fine-tuned wav2vec2 or HuBERT checkpoint) served through transformers.js or a small Python microservice, and adding a consent + data-retention layer before any signal is stored beyond the local session.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    SignalWell — a student project prototype. Built with face-api.js, transformers.js, and Chart.js. Not a medical device; not for clinical use.
+  </div>
+</footer>
+
+</div><!-- /#appRoot -->
+
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script type="module">
+/* =========================================================
+   SignalWell — client-side fusion logic
+   ========================================================= */
+
+const state = {
+  face: {active:false, score:null, weight:25},
+  voice:{active:false, score:null, weight:15},
+  text: {active:false, score:null, weight:30},
+  behavior:{active:true, score:50, weight:20},
+  aux: {active:false, score:null, weight:10}
+};
+
+const $ = (id) => document.getElementById(id);
+
+/* ---------------- SIGN-IN GATE ---------------- */
+let currentUser = null;
+$('gateSubmit').addEventListener('click', () => {
+  const name = $('gateName').value.trim();
+  if(!name || !$('gateConsent').checked){
+    $('gateError').style.display = 'block';
+    $('gateError').textContent = !name
+      ? 'Please enter your name to continue.'
+      : 'Please check the consent box to continue.';
+    return;
+  }
+  currentUser = name;
+  $('signedInAs').textContent = name;
+  $('gate').style.display = 'none';
+  $('appRoot').style.display = 'block';
+});
+$('gateName').addEventListener('keydown', (e) => { if(e.key === 'Enter') $('gateSubmit').click(); });
+
+function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+
+function paintMeter(fillEl, valueEl, subEl, score, label, subtitle){
+  if(score === null || Number.isNaN(score)){
+    fillEl.style.height = '0%';
+    valueEl.textContent = '--';
+    if(subtitle !== undefined) subEl.textContent = subtitle;
+    return;
+  }
+  fillEl.style.height = clamp(score,0,100) + '%';
+  valueEl.textContent = Math.round(score);
+  if(subtitle !== undefined) subEl.textContent = subtitle;
+}
+
+function recomputeMaster(){
+  const active = Object.entries(state).filter(([k,v]) => v.active && v.score !== null && v.score !== undefined);
+  let master = 50, tagClass='tag-steady', tagText='Steady';
+  if(active.length){
+    const totalWeight = active.reduce((s,[,v]) => s+v.weight, 0);
+    master = active.reduce((s,[,v]) => s + v.score*v.weight, 0) / totalWeight;
+  }
+  master = clamp(master,0,100);
+  $('masterValue').textContent = Math.round(master);
+  $('masterMeterFill').style.height = master + '%';
+
+  if(master >= 75){ tagClass='tag-thrive'; tagText='Thriving'; }
+  else if(master >= 55){ tagClass='tag-steady'; tagText='Steady'; }
+  else if(master >= 35){ tagClass='tag-strain'; tagText='Strained'; }
+  else { tagClass='tag-risk'; tagText='At risk'; }
+
+  const tagEl = $('masterTag');
+  tagEl.className = 'master-tag ' + tagClass;
+  tagEl.textContent = tagText;
+
+  lowStreak = master < 35 ? lowStreak+1 : 0;
+  $('supportBanner').classList.toggle('show', lowStreak >= 3);
+
+  return master;
+}
+let lowStreak = 0;
+
+/* ---------------- FACE CHANNEL ---------------- */
+let faceInterval = null;
+const faceToggle = $('faceToggle');
+faceToggle.addEventListener('click', async () => {
+  if(!state.face.active){
+    try{
+      $('faceSub').textContent = 'Loading models…';
+      const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights';
+      await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+      await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
+      const stream = await navigator.mediaDevices.getUserMedia({video:true});
+      $('faceVideo').srcObject = stream;
+      state.face.active = true;
+      faceToggle.setAttribute('aria-pressed','true');
+      faceToggle.textContent = 'Disable camera';
+      $('faceLit').textContent = '●';
+      $('faceSub').textContent = 'Detecting…';
+      faceInterval = setInterval(runFaceDetection, 1200);
+    }catch(err){
+      $('faceSub').textContent = 'Camera/model unavailable: ' + err.message;
+    }
+  } else {
+    state.face.active = false;
+    clearInterval(faceInterval);
+    const stream = $('faceVideo').srcObject;
+    if(stream) stream.getTracks().forEach(t=>t.stop());
+    $('faceVideo').srcObject = null;
+    faceToggle.setAttribute('aria-pressed','false');
+    faceToggle.textContent = 'Enable camera';
+    $('faceLit').textContent = '';
+    state.face.score = null;
+    paintMeter($('faceValue').parentElement.querySelector('.meter-fill'), $('faceValue'), $('faceSub'), null, null, 'Camera off');
+    recomputeMaster();
+  }
+});
+
+async function runFaceDetection(){
+  const video = $('faceVideo');
+  if(video.readyState < 2) return;
+  const result = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceExpressions();
+  if(!result){
+    $('faceSub').textContent = 'No face detected';
+    return;
+  }
+  const e = result.expressions;
+  const valence = (e.happy*1 + e.neutral*0.55 + e.surprised*0.4)
+                - (e.sad*1 + e.angry*1 + e.fearful*0.85 + e.disgusted*0.85);
+  const score = clamp(50 + valence*60, 0, 100);
+  state.face.score = score;
+  const top = Object.entries(e).sort((a,b)=>b[1]-a[1])[0][0];
+  $('faceValue').textContent = Math.round(score);
+  $('faceSub').textContent = 'Dominant: ' + top;
+  recomputeMaster();
+}
+
+/* ---------------- VOICE CHANNEL ---------------- */
+let audioCtx, analyser, micStream, voiceInterval;
+const voiceToggle = $('voiceToggle');
+voiceToggle.addEventListener('click', async () => {
+  if(!state.voice.active){
+    try{
+      micStream = await navigator.mediaDevices.getUserMedia({audio:true});
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioCtx.createMediaStreamSource(micStream);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 2048;
+      source.connect(analyser);
+      state.voice.active = true;
+      voiceToggle.setAttribute('aria-pressed','true');
+      voiceToggle.textContent = 'Disable mic';
+      $('voiceLit').textContent = '●';
+      voiceInterval = setInterval(analyzeVoice, 700);
+    }catch(err){
+      $('voiceSub').textContent = 'Mic unavailable: ' + err.message;
+    }
+  } else {
+    state.voice.active = false;
+    clearInterval(voiceInterval);
+    if(micStream) micStream.getTracks().forEach(t=>t.stop());
+    if(audioCtx) audioCtx.close();
+    voiceToggle.setAttribute('aria-pressed','false');
+    voiceToggle.textContent = 'Enable mic';
+    $('voiceLit').textContent = '';
+    state.voice.score = null;
+    paintMeter($('voiceMeterFill'), $('voiceValue'), $('voiceSub'), null, null, 'Mic off');
+    recomputeMaster();
+  }
+});
+
+function analyzeVoice(){
+  const buf = new Float32Array(analyser.fftSize);
+  analyser.getFloatTimeDomainData(buf);
+  let sumSquares = 0, crossings = 0;
+  for(let i=0;i<buf.length;i++){
+    sumSquares += buf[i]*buf[i];
+    if(i>0 && ((buf[i-1] < 0 && buf[i] >= 0) || (buf[i-1] >= 0 && buf[i] < 0))) crossings++;
+  }
+  const rms = Math.sqrt(sumSquares/buf.length);
+  const zcr = crossings / buf.length;
+  // Heuristic: moderate steady energy + moderate zcr reads as calmer engagement;
+  // near-silence or very jittery zcr reads as fatigue/tension proxy. This is a
+  // deliberately simple stand-in for a trained SER model — see Model Stack section.
+  const energyTerm = clamp(rms*400, 0, 1);
+  const steadiness = 1 - clamp(Math.abs(zcr - 0.06) * 8, 0, 1);
+  const score = clamp((energyTerm*0.5 + steadiness*0.5) * 100, 0, 100);
+  state.voice.score = score;
+  paintMeter($('voiceMeterFill'), $('voiceValue'), $('voiceSub'), score, null,
+    rms < 0.01 ? 'Very quiet' : (steadiness > 0.6 ? 'Steady tone' : 'Variable tone'));
+  recomputeMaster();
+}
+
+/* ---------------- TEXT CHANNEL ---------------- */
+let sentimentPipeline = null;
+$('textAnalyzeBtn').addEventListener('click', async () => {
+  const text = $('journalInput').value.trim();
+  if(!text){ $('textSub').textContent = 'Write something first'; return; }
+  $('textSub').textContent = 'Loading DistilBERT…';
+  try{
+    if(!sentimentPipeline){
+      const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
+      sentimentPipeline = await pipeline('sentiment-analysis');
+    }
+    const out = await sentimentPipeline(text);
+    const {label, score:conf} = out[0];
+    const score = label === 'POSITIVE' ? 50 + conf*50 : 50 - conf*50;
+    state.text.active = true;
+    state.text.score = score;
+    $('textLit').textContent = '●';
+    $('textValue').textContent = Math.round(score);
+    $('textSub').textContent = label + ' · ' + (conf*100).toFixed(0) + '% confidence';
+    behaviorLogEntry(text);
+    recomputeMaster();
+  }catch(err){
+    $('textSub').textContent = 'Model failed to load: ' + err.message;
+  }
+});
+
+/* ---------------- BEHAVIOR CHANNEL (passive) ---------------- */
+let entryCount = 0, lateNightCount = 0;
+let keyTimestamps = [];
+
+$('journalInput').addEventListener('keydown', () => { keyTimestamps.push(Date.now()); });
+
+function behaviorLogEntry(text){
+  entryCount++;
+  const hour = new Date().getHours();
+  if(hour >= 0 && hour < 5) lateNightCount++;
+  $('statEntries').textContent = entryCount;
+  $('statLateNight').textContent = lateNightCount;
+
+  let rhythmLabel = '--';
+  if(keyTimestamps.length > 4){
+    const gaps = [];
+    for(let i=1;i<keyTimestamps.length;i++) gaps.push(keyTimestamps[i]-keyTimestamps[i-1]);
+    const mean = gaps.reduce((a,b)=>a+b,0)/gaps.length;
+    const variance = gaps.reduce((a,b)=>a+(b-mean)*(b-mean),0)/gaps.length;
+    const sd = Math.sqrt(variance);
+    rhythmLabel = sd > 900 ? 'Hesitant' : (sd > 400 ? 'Mixed' : 'Steady');
+    $('statRhythm').textContent = rhythmLabel;
+  }
+  keyTimestamps = [];
+  computeBehaviorScore(rhythmLabel);
+}
+
+function computeBehaviorScore(rhythmLabel){
+  let score = 60;
+  if(rhythmLabel === 'Hesitant') score -= 15;
+  if(rhythmLabel === 'Steady') score += 10;
+  if(lateNightCount > 0) score -= Math.min(lateNightCount*8, 24);
+  score = clamp(score, 0, 100);
+  state.behavior.score = score;
+  $('behaviorValue').textContent = Math.round(score);
+  recomputeMaster();
+}
+
+let sessionElapsedSecs = 0;
+setInterval(() => {
+  if(isPaused) return;
+  sessionElapsedSecs++;
+  const m = Math.floor(sessionElapsedSecs/60), s = sessionElapsedSecs%60;
+  $('statSession').textContent = m + ':' + String(s).padStart(2,'0');
+}, 1000);
+
+/* ---------------- OPTIONAL / AUX CHANNEL ---------------- */
+function bindSlider(sliderId, labelId, onChange){
+  const slider = $(sliderId);
+  slider.addEventListener('input', () => {
+    $(labelId).textContent = slider.value;
+    onChange(Number(slider.value));
+  });
+}
+let sleepH = 7, activityM = 20, academicP = 5;
+bindSlider('sleepSlider','sleepVal', v => { sleepH = v; updateAux(); });
+bindSlider('activitySlider','activityVal', v => { activityM = v; updateAux(); });
+bindSlider('academicSlider','academicVal', v => { academicP = v; updateAux(); });
+['sleepInclude','activityInclude','academicInclude'].forEach(id => {
+  $(id).addEventListener('change', updateAux);
+});
+
+function updateAux(){
+  const included = [];
+  if($('sleepInclude').checked) included.push(clamp((sleepH/8)*100,0,100));
+  if($('activityInclude').checked) included.push(clamp((activityM/45)*100,0,100));
+  if($('academicInclude').checked) included.push(clamp(100-(academicP*10),0,100));
+  if(included.length){
+    state.aux.active = true;
+    state.aux.score = included.reduce((a,b)=>a+b,0)/included.length;
+  } else {
+    state.aux.active = false;
+    state.aux.score = null;
+  }
+  recomputeMaster();
+}
+
+/* ---------------- TREND / HISTORY ---------------- */
+let trendChart;
+function loadHistory(){
+  try{ return JSON.parse(localStorage.getItem('signalwell_history') || '[]'); }
+  catch{ return []; }
+}
+function saveHistory(hist){ localStorage.setItem('signalwell_history', JSON.stringify(hist)); }
+
+function renderTrend(){
+  const hist = loadHistory();
+  const ctx = document.getElementById('trendChart');
+  const labels = hist.map(h => new Date(h.t).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}));
+  const data = hist.map(h => h.score);
+  if(trendChart) trendChart.destroy();
+  trendChart = new Chart(ctx, {
+    type:'line',
+    data:{ labels, datasets:[{
+      label:'Wellbeing reading', data,
+      borderColor:'#8FA377', backgroundColor:'rgba(143,163,119,0.15)',
+      tension:0.35, fill:true, pointRadius:3
+    }]},
+    options:{
+      scales:{
+        y:{ min:0, max:100, ticks:{color:'#8A93A6'}, grid:{color:'#2E3542'} },
+        x:{ ticks:{color:'#8A93A6'}, grid:{display:false} }
+      },
+      plugins:{ legend:{display:false} }
+    }
+  });
+  $('historyStatus').textContent = hist.length
+    ? hist.length + ' snapshot(s) stored locally in this browser.'
+    : 'No snapshots logged yet — stored locally in this browser only.';
+}
+renderTrend();
+
+$('logSnapshotBtn').addEventListener('click', () => {
+  const master = recomputeMaster();
+  const hist = loadHistory();
+  hist.push({t:Date.now(), score:Math.round(master)});
+  saveHistory(hist.slice(-40));
+  renderTrend();
+});
+$('clearHistoryBtn').addEventListener('click', () => {
+  localStorage.removeItem('signalwell_history');
+  renderTrend();
+});
+
+/* ---------------- PAUSE / RESUME SESSION ---------------- */
+let isPaused = false;
+const pausedOverlays = ['pausedFace','pausedVoice','pausedText','pausedBehavior'].map(id => $(id));
+
+$('pauseBtn').addEventListener('click', () => {
+  isPaused = !isPaused;
+  const btn = $('pauseBtn');
+  const status = $('sessionStatus');
+
+  if(isPaused){
+    // Stop analyzing — clear the live detection loops without dropping the camera/mic permission,
+    // so resuming doesn't force the user to re-grant access.
+    if(faceInterval) clearInterval(faceInterval);
+    if(voiceInterval) clearInterval(voiceInterval);
+
+    $('textAnalyzeBtn').disabled = true;
+    $('journalInput').disabled = true;
+
+    pausedOverlays.forEach(el => el.style.display = 'flex');
+    btn.textContent = 'Resume session';
+    btn.classList.add('is-paused');
+    btn.setAttribute('aria-pressed','true');
+    status.innerHTML = '<span class="dot-paused">●</span> ' + currentUser + ' — paused';
+  } else {
+    // Resume — only restart loops for channels the user had actually enabled.
+    if(state.face.active) faceInterval = setInterval(runFaceDetection, 1200);
+    if(state.voice.active) voiceInterval = setInterval(analyzeVoice, 700);
+
+    $('textAnalyzeBtn').disabled = false;
+    $('journalInput').disabled = false;
+
+    pausedOverlays.forEach(el => el.style.display = 'none');
+    btn.textContent = 'Pause session';
+    btn.classList.remove('is-paused');
+    btn.setAttribute('aria-pressed','false');
+    status.innerHTML = '<span class="dot-live">●</span> ' + currentUser;
+  }
+});
+
+/* init */
+recomputeMaster();
+</script>
+</body>
+</html>

@@ -16,42 +16,58 @@ Student wellbeing often doesn't show up in just one place. A student might sound
 ```
 .
 ├── README.md                           # Main project overview
-├── .gitignore                          # Ignores model weights and dataset files
-├── voice_model/                        # Voice emotion recognition pipeline
+├── .gitignore                          # Configured for models and datasets
+├── docs/                               # Engineering documentation suite
+│   ├── README.md                       # Documentation index
+│   ├── 01_PROCESS_LOG.md               # Chronological problem & fix log
+│   ├── 02_ARCHITECTURE.md              # Multimodal architecture specifications
+│   ├── 03_FACE_DETECTION_AND_CALIBRATION.md # Face cascade, CLAHE, logit bias & HUD
+│   ├── 04_TEXT_SITUATIONAL_PIPELINE.md # Discourse turning points & situational archetypes
+│   └── 05_DEPLOYMENT_AND_TESTING_GUIDE.md # Runbook & verification commands
+├── voice_model/                        # Voice emotion recognition pipeline (ECAN-SER)
 │   ├── README.md                       # Voice model details and benchmark results
 │   ├── SIGNALWELL_VOICE_PIPELINE.py    # Training and inference script
 │   ├── SIGNALWELL_VOICE_COLAB.ipynb    # Google Colab notebook (T4 GPU ready)
 │   ├── requirements.txt                # Python dependencies
-│   ├── sample_1.wav                    # Test audio sample
-│   ├── sample_2.wav                    # Test audio sample
-│   └── sample_3.wav                    # Test audio sample
-├── face_model/                         # Face emotion module (in progress)
-├── text_model/                         # Text emotion module (in progress)
-└── multimodal_fusion/                  # Late fusion logic (to be added)
+│   └── sample_*.wav                    # Audio test samples
+└── SignalWell/                         # Full multimodal application & models
+    ├── app/                            # Interactive web dashboard & HUD
+    │   ├── index.html                  # Main unified wellbeing dashboard
+    │   ├── test_webcam_face.html       # Standalone live webcam HUD tester
+    │   ├── test_text_scenarios.html    # Standalone situational text sandbox
+    │   └── models/                     # Offline face-api neural weights
+    ├── colab_scripts/                  # GPU training & calibration scripts
+    │   ├── 82_fix_face_model_v7_neutral_bias_clahe_and_export.py
+    │   ├── 83_test_and_fix_situational_scenario_emotions.py
+    │   └── INDEX.txt
+    ├── live_webcam_face_app.py         # Native OpenCV desktop HUD app
+    ├── server.js                       # Zero-dependency local Node.js server
+    └── test_text_model_diagnostics.js  # 10-scenario regression test suite
 ```
 
 ## System Workflow
 
 ```mermaid
 flowchart TD
-    Audio[Microphone Audio] --> Voice[Voice Model: WavLM + Prosody]
-    Video[Webcam Video] --> Face[Face Model]
-    Text[Student Text] --> TextMod[Text Model]
+    Audio[Microphone Audio] --> Voice[Voice Model: ECAN-SER + Prosody]
+    Video[Live Webcam Feed] --> Face[Face Model: Cascading HUD + Logit Offset]
+    Text[Reflective Text Entry] --> TextMod[Text Model: Situational Discourse Engine]
 
-    Voice -->|Probabilities + Uncertainty| Fusion[Late Fusion Engine]
-    Face -->|Probabilities + Confidence| Fusion
-    TextMod -->|Probabilities + Confidence| Fusion
+    Voice -->|Probabilities + Dirichlet Uncertainty| Fusion[Late Decision Fusion]
+    Face -->|Probabilities + Bounding HUD| Fusion
+    TextMod -->|Probabilities + Discourse Context| Fusion
 
-    Fusion --> Decision[Consensus Emotion State]
-    Decision --> Alerts[Counselor Notification System]
+    Fusion --> Decision[Consensus Student Emotional State]
+    Decision --> Alerts[Counselor Early Warning Notification]
 ```
 
 ## Current Status
 
-- **Voice Model**: Complete. Trained and evaluated on combined speech datasets (RAVDESS, CREMA-D, TESS, SAVEE) with a speaker-independent test split, reaching 68.3% Macro F1 and 68.2% test accuracy. See `voice_model/` for code and instructions.
-- **Face Model**: In progress.
-- **Text Model**: In progress.
-- **Fusion Engine**: Scheduled after all three modality baselines are ready.
+- **Voice Model**: Complete. Trained and evaluated on combined speech datasets (RAVDESS, CREMA-D, TESS, SAVEE) with speaker-independent cross-validation (68.3% Macro F1, 68.2% Accuracy).
+- **Face Model**: Complete & Calibrated. Multi-tier cascading detector (TinyFace 320/224 + SSD MobileNet), CLAHE contrast equalization, neutral logit bias offset ($\Delta z_{neutral} = 0.55$), and real-time on-face visual HUD badge.
+- **Text Model**: Complete & Validated. Context-aware situational discourse engine resolving negations, contrastive pivots, third-party attributions, and student emotional archetypes (10/10 test benchmark passing).
+- **Documentation**: Authoritative technical docs maintained in [`docs/`](./docs/README.md).
+- **Multimodal Web Application**: Live on `http://localhost:3000` via `node SignalWell/server.js`.
 
 ## Team
 

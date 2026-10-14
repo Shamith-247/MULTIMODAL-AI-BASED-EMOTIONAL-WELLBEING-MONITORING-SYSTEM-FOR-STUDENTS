@@ -1,0 +1,447 @@
+## Prompt: Improve Speech Emotion Recognition Model from 85% Toward 90%+
+
+I currently have a Speech Emotion Recognition (SER) model trained using the following datasets:
+
+* RAVDESS
+* CREMA-D
+* TESS
+* SAVEE
+
+Total dataset size: approximately **12,162 audio samples**.
+
+My current model achieves approximately **85% validation/test accuracy**, and I want to improve it toward **90%+**, while avoiding data leakage and artificially inflated accuracy.
+
+### Your task
+
+Analyze my existing code and pipeline first. **Do not immediately rewrite everything.** Identify the current bottlenecks and then implement improvements systematically.
+
+The goal is to obtain the highest possible **genuine speaker-independent performance**, not merely a higher random-split accuracy.
+
+---
+
+### STEP 1 — Audit the existing pipeline
+
+Before changing the model, inspect:
+
+1. Dataset loading
+2. Emotion-label mapping
+3. Audio preprocessing
+4. Sampling rate
+5. Audio duration handling
+6. Feature extraction
+7. Train/validation/test splitting
+8. Speaker distribution
+9. Class distribution
+10. Model architecture
+11. Loss function
+12. Optimizer
+13. Learning-rate scheduler
+14. Batch size
+15. Number of epochs
+16. Data augmentation
+17. Early stopping
+18. Evaluation methodology
+
+Explain exactly which components are likely limiting the current ~85% accuracy.
+
+---
+
+### STEP 2 — Create a reliable baseline
+
+Before making improvements:
+
+* Calculate training accuracy
+* Validation accuracy
+* Test accuracy
+* Macro F1
+* Weighted F1
+* Precision
+* Recall
+* Per-class F1
+* Confusion matrix
+
+Also show the number of samples in every emotion class.
+
+Do not optimize only for accuracy.
+
+---
+
+### STEP 3 — Prevent data leakage
+
+This is extremely important.
+
+Check whether multiple recordings from the same speaker occur in both training and validation/test sets.
+
+Use a **speaker-independent split** wherever speaker IDs are available.
+
+Prefer:
+
+```text
+TRAIN      70%
+VALIDATION 15%
+TEST       15%
+```
+
+with speakers separated between the sets.
+
+Do NOT allow the same speaker to appear in both training and test sets.
+
+If the original split cannot be made speaker-independent for a particular dataset, explain the limitation.
+
+---
+
+### STEP 4 — Standardize the datasets
+
+The four datasets use different emotion labels and have different recording characteristics.
+
+Create one consistent emotion mapping.
+
+Use a clearly defined common label set, for example:
+
+```text
+angry
+disgust
+fear
+happy
+neutral
+sad
+surprise
+```
+
+Handle RAVDESS "calm" explicitly.
+
+Do not silently merge or remove emotions.
+
+Print the final mapping used for every dataset.
+
+Also report:
+
+```text
+Dataset → number of samples → emotions available
+```
+
+---
+
+### STEP 5 — Audio preprocessing
+
+Use a consistent sampling rate, preferably:
+
+```text
+16 kHz
+```
+
+Apply appropriate preprocessing:
+
+* mono conversion
+* resampling
+* amplitude normalization
+* reasonable maximum audio duration
+* padding/truncation where necessary
+
+Do NOT remove emotion-relevant acoustic information through aggressive preprocessing.
+
+---
+
+### STEP 6 — Data augmentation
+
+Apply augmentation ONLY to the training set.
+
+Experiment with:
+
+1. Small background noise
+2. Small time shift
+3. Slight speed perturbation
+4. Slight pitch variation
+5. Volume variation
+6. SpecAugment where appropriate
+
+Do not apply random augmentation to validation/test data.
+
+Avoid excessive augmentation that changes the emotion itself.
+
+---
+
+### STEP 7 — Handle class imbalance
+
+Calculate the class distribution.
+
+If imbalance exists, compare:
+
+* weighted cross-entropy
+* focal loss
+* weighted sampling
+
+Do not blindly use all three simultaneously.
+
+Select the method that gives the best validation Macro F1.
+
+---
+
+### STEP 8 — Improve the model architecture
+
+If my current model uses MFCC + CNN/CNN-LSTM, create a stronger transfer-learning baseline.
+
+Evaluate pretrained speech encoders such as:
+
+* WavLM
+* HuBERT
+* Wav2Vec2
+
+Prefer starting with:
+
+**WavLM-base**
+
+if GPU memory allows it.
+
+Use the pretrained encoder to obtain speech representations and add an emotion-classification head.
+
+A suitable architecture is:
+
+```text
+Audio
+ ↓
+16 kHz preprocessing
+ ↓
+WavLM / HuBERT
+ ↓
+Attention pooling
+ ↓
+Dense layer
+ ↓
+Dropout
+ ↓
+Emotion classifier
+```
+
+Do not automatically fine-tune every layer from the beginning.
+
+Compare:
+
+### Experiment A
+
+Frozen encoder + classifier
+
+### Experiment B
+
+Partially unfrozen encoder + classifier
+
+### Experiment C
+
+Full fine-tuning with a small learning rate
+
+Choose the best configuration using validation Macro F1.
+
+---
+
+### STEP 9 — Use attention pooling
+
+Instead of simply taking the mean of all frame embeddings, test an attention-pooling layer so the model can learn which portions of the speech signal are important for emotion recognition.
+
+Compare:
+
+```text
+Mean pooling
+vs
+Attention pooling
+```
+
+Keep the better configuration.
+
+---
+
+### STEP 10 — Training strategy
+
+Use:
+
+* AdamW optimizer
+* suitable learning rate for pretrained encoder
+* smaller learning rate for the pretrained encoder than the classification head
+* learning-rate scheduler
+* early stopping
+* gradient clipping
+* mixed precision if GPU supports it
+* model checkpointing
+
+Do not train for an unnecessarily large number of epochs.
+
+Save the model with the best validation Macro F1 rather than simply the final epoch.
+
+---
+
+### STEP 11 — Hyperparameter experiments
+
+Do controlled experiments rather than changing everything simultaneously.
+
+Test combinations of:
+
+```text
+Learning rate:
+1e-5
+2e-5
+5e-5
+
+Dropout:
+0.2
+0.3
+0.5
+
+Batch size:
+8
+16
+32
+
+Weight decay:
+1e-4
+1e-3
+
+Pooling:
+mean
+attention
+```
+
+Do not run an enormous grid search if GPU resources are limited.
+
+Use the validation set for model selection.
+
+---
+
+### STEP 12 — Dataset balancing experiment
+
+Run at least these comparisons:
+
+### Experiment 1
+
+Current dataset + current model
+
+### Experiment 2
+
+Current dataset + augmentation
+
+### Experiment 3
+
+Current dataset + pretrained WavLM
+
+### Experiment 4
+
+Current dataset + WavLM + augmentation
+
+### Experiment 5
+
+Current dataset + WavLM + augmentation + class balancing
+
+Create a table:
+
+| Experiment | Model   | Augmentation | Balancing | Accuracy | Macro F1 |
+| ---------- | ------- | ------------ | --------- | -------: | -------: |
+| Baseline   | Current | No           | No        |     ~85% |        — |
+| E1         | ...     | ...          | ...       |      ... |      ... |
+
+This will show which modification actually improves performance.
+
+---
+
+### STEP 13 — Confusion matrix analysis
+
+After training the best model, generate a confusion matrix.
+
+Identify which emotions are being confused.
+
+For example:
+
+```text
+fear → sad
+calm → neutral
+disgust → angry
+happy → surprise
+```
+
+Do not assume these are the actual errors. Determine them from the confusion matrix.
+
+Then suggest targeted improvements for the weakest emotion classes.
+
+---
+
+### STEP 14 — Evaluate generalization
+
+After selecting the best model, evaluate it ONCE on the held-out test set.
+
+Report:
+
+```text
+Test Accuracy
+Macro F1
+Weighted F1
+Precision
+Recall
+Per-class F1
+Confusion Matrix
+```
+
+Do not repeatedly tune the model using the test set.
+
+---
+
+### STEP 15 — Do NOT artificially increase accuracy
+
+Do NOT:
+
+* duplicate validation/test samples
+* leak speakers between datasets
+* train on test data
+* tune directly against the test set
+* remove difficult samples simply to improve accuracy
+* use augmentation on validation/test data
+* report training accuracy as test accuracy
+* randomly change labels
+* claim 90% if only a random split achieves it
+
+The target is **genuine improvement**, not an inflated metric.
+
+---
+
+### STEP 16 — Final target
+
+My current accuracy is approximately:
+
+**85%**
+
+Target:
+
+**90%+**
+
+However, if 90% cannot be achieved honestly, report the best genuine result instead of artificially increasing the number.
+
+I want you to explain:
+
+1. Current baseline performance
+2. Main weaknesses
+3. Changes made
+4. Why each change should help
+5. Results of every experiment
+6. Best model architecture
+7. Best hyperparameters
+8. Final test accuracy
+9. Macro F1
+10. Confusion matrix
+11. Per-emotion performance
+12. Whether the improvement is statistically/reliably meaningful
+
+### Important requirement
+
+**Do not rewrite the entire project before understanding my current code.**
+
+First inspect my existing code and tell me:
+
+> "These are the 3–5 most likely reasons your model is stuck around 85%."
+
+Then implement the improvements one stage at a time.
+
+At every stage, preserve reproducibility using:
+
+* fixed random seeds
+* deterministic splitting where practical
+* saved configuration
+* saved best checkpoint
+* clear experiment names
+
+Finally provide the complete optimized training code that I can run in Google Colab with GPU support.

@@ -1,0 +1,124 @@
+tokenizer_config.json: 
+ 20.9k/? [00:00<00:00, 1.46MB/s]
+tokenizer.json: 
+ 3.58M/? [00:00<00:00, 6.78MB/s]
+special_tokens_map.json: 100%
+ 694/694 [00:00<00:00, 77.1kB/s]
+Device set to use cuda:0
+W0829 11:46:04.115000 4976 torch/_inductor/utils.py:1731] [1/0_1] Not enough SMs to use max_autotune_gemm mode
+
+Had coffee with an old friend today, it felt so good to catch up.
+    joy             0.951  ████████████████████████████
+    admiration      0.023  
+    approval        0.006  
+
+Finally finished the project I've been putting off for weeks.
+    realization     0.326  █████████
+    neutral         0.204  ██████
+    approval        0.198  █████
+
+I keep replaying that conversation in my head and it's driving me crazy.
+    excitement      0.709  █████████████████████
+    joy             0.137  ████
+    amusement       0.049  █
+
+Nothing seems to be going right this week.
+    disappointment  0.926  ███████████████████████████
+    neutral         0.022  
+    disapproval     0.021  
+
+Proud of myself for finishing the race but my legs are killing me.
+    pride           0.863  █████████████████████████
+    admiration      0.077  ██
+    disappointment  0.011  
+
+Excited about the new job but honestly a little scared too.
+    fear            0.615  ██████████████████
+    excitement      0.304  █████████
+    nervousness     0.063  █
+
+Did laundry, made dinner, watched some TV. Pretty normal day.
+    neutral         0.538  ████████████████
+    approval        0.315  █████████
+    admiration      0.047  █
+
+Woke up late again, need to fix my sleep schedule.
+    neutral         0.333  █████████
+    realization     0.275  ████████
+    embarrassment   0.106  ███
+
+Can't stop worrying about the presentation tomorrow.
+    nervousness     0.935  ████████████████████████████
+    fear            0.017  
+    disappointment  0.011  
+
+My heart's been racing all day for no real reason.
+    neutral         0.728  █████████████████████
+    annoyance       0.045  █
+    approval        0.034  █
+
+So annoyed that they cancelled last minute again.
+    annoyance       0.979  █████████████████████████████
+    disappointment  0.009  
+    anger           0.007  
+
+I'm furious about how that meeting went.
+    anger           0.983  █████████████████████████████
+    annoyance       0.011  
+    disapproval     0.001  
+
+Really grateful for my sister checking in on me today.
+    gratitude       0.946  ████████████████████████████
+    admiration      0.037  █
+    caring          0.007  
+
+Small things like a good cup of tea make such a difference.
+    neutral         0.352  ██████████
+    admiration      0.333  █████████
+    approval        0.223  ██████
+
+It's been a year since he passed and it still hits me sometimes.
+    sadness         0.831  ████████████████████████
+    realization     0.074  ██
+    neutral         0.045  █
+
+Tired. Just tired.
+    annoyance       0.480  ██████████████
+    neutral         0.279  ████████
+    sadness         0.149  ████
+
+Okay day I guess.
+    optimism        0.551  ████████████████
+    neutral         0.214  ██████
+    approval        0.186  █████
+
+Actually kind of a good one today :)
+    admiration      0.888  ██████████████████████████
+    approval        0.077  ██
+    neutral         0.010  
+
+============================================================
+cirimus/modernbert-base-go-emotions
+============================================================
+config.json: 
+ 3.16k/? [00:00<00:00, 157kB/s]
+model.safetensors: 100%
+ 599M/599M [00:04<00:00, 192MB/s]
+---------------------------------------------------------------------------
+ValueError                                Traceback (most recent call last)
+/tmp/ipykernel_4976/3075257278.py in <cell line: 0>()
+     38 
+     39 run_and_print("cirimus/modernbert-large-go-emotions")
+---> 40 run_and_print("cirimus/modernbert-base-go-emotions")
+
+3 frames
+/usr/local/lib/python3.13/dist-packages/transformers/models/auto/tokenization_auto.py in from_pretrained(cls, pretrained_model_name_or_path, *inputs, **kwargs)
+   1151                 tokenizer_class = tokenizer_class_from_name(tokenizer_class_candidate)
+   1152             if tokenizer_class is None:
+-> 1153                 raise ValueError(
+   1154                     f"Tokenizer class {tokenizer_class_candidate} does not exist or is not currently imported."
+   1155                 )
+
+ValueError: Tokenizer class TokenizersBackend does not exist or is not currently imported.
+tokenizer_config.json: 100%
+ 350/350 [00:00<00:00, 33.4kB/s]

@@ -1,0 +1,211 @@
+import { PoseLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+const $ = (id) => document.getElementById(id);
+const video = $('video');
+const canvas = $('canvas');
+const ctx = canvas.getContext('2d');
+
+let poseLandmarker = null;
+let stream = null;
+let rafId = null;
+let running = false;
+
+// Baseline captured via "Calibrate neutral pose" — until set, height/drop metrics
+// are shown relative to the very first detected frame as a rough default.
+let baseline = null;
+const scoreHistory = [];
+
+const LM = { NOSE:0, L_SHOULDER:11, R_SHOULDER:12, L_ELBOW:13, R_ELBOW:14, L_WRIST:15, R_WRIST:16, L_HIP:23, R_HIP:24 };
+
+function dist(a, b){ return Math.hypot(a.x - b.x, a.y - b.y); }
+
+$('startBtn').addEventListener('click', startDemo);
+$('stopBtn').addEventListener('click', stopDemo);
+$('calibrateBtn').addEventListener('click', () => { baseline = null; /* captured on next frame */ armCalibration = true; });
+let armCalibration = false;
+
+async function startDemo(){
+  $('startBtn').disabled = true;
+  $('statusLine').textContent = 'Loading pose model…';
+  try{
+    const vision = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+    );
+    poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+        delegate: "GPU"
+      },
+      runningMode: "VIDEO",
+      numPoses: 1
+    });
+  }catch(err){
+    $('statusLine').textContent = 'Failed to load pose model: ' + err.message;
+    $('startBtn').disabled = false;
+    return;
+  }
+
+  $('statusLine').textContent = 'Requesting camera…';
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+  }catch(err){
+    $('statusLine').textContent = 'Camera unavailable: ' + err.message;
+    $('startBtn').disabled = false;
+    return;
+  }
+
+  video.srcObject = stream;
+  await video.play();
+  $('overlayMsg').style.display = 'none';
+  $('calibrateBtn').disabled = false;
+  $('stopBtn').disabled = false;
+  $('statusLine').textContent = 'Running — stand/sit naturally, then calibrate';
+  running = true;
+  loop();
+}
+
+function stopDemo(){
+  running = false;
+  if(rafId) cancelAnimationFrame(rafId);
+  if(stream) stream.getTracks().forEach(t => t.stop());
+  video.srcObject = null;
+  $('startBtn').disabled = false;
+  $('calibrateBtn').disabled = true;
+  $('stopBtn').disabled = true;
+  $('overlayMsg').style.display = 'flex';
+  $('overlayMsg').textContent = 'Stopped. Click "Start camera" to begin again.';
+  $('statusLine').textContent = 'Idle';
+  $('scoreBig').textContent = '--';
+  $('scoreTag').textContent = 'Waiting for pose';
+  $('scoreTag').className = 'score-tag tag-neutral';
+}
+
+function loop(){
+  if(!running) return;
+  if(video.videoWidth){
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.save();
+    ctx.scale(-1, 1); // mirror, feels natural for a self-facing camera
+    ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+    ctx.restore();
+
+    const result = poseLandmarker.detectForVideo(video, performance.now());
+    if(result.landmarks && result.landmarks.length > 0){
+      const lm = result.landmarks[0];
+      drawSkeleton(lm);
+      computeMetrics(lm);
+      $('statusLine').textContent = 'Pose detected';
+    } else {
+      $('statusLine').textContent = 'No pose detected — step back so your shoulders are visible';
+    }
+  }
+  rafId = requestAnimationFrame(loop);
+}
+
+function drawSkeleton(lm){
+  const w = canvas.width, h = canvas.height;
+  const pairs = [[LM.L_SHOULDER,LM.R_SHOULDER],[LM.L_SHOULDER,LM.L_ELBOW],[LM.L_ELBOW,LM.L_WRIST],
+                 [LM.R_SHOULDER,LM.R_ELBOW],[LM.R_ELBOW,LM.R_WRIST],[LM.L_SHOULDER,LM.L_HIP],
+                 [LM.R_SHOULDER,LM.R_HIP],[LM.L_HIP,LM.R_HIP]];
+  ctx.save();
+  ctx.scale(-1, 1);
+  ctx.strokeStyle = 'rgba(143,163,119,.85)';
+  ctx.lineWidth = 3;
+  pairs.forEach(([a,b]) => {
+    ctx.beginPath();
+    ctx.moveTo(-lm[a].x*w, lm[a].y*h);
+    ctx.lineTo(-lm[b].x*w, lm[b].y*h);
+    ctx.stroke();
+  });
+  ctx.fillStyle = '#EDE7DA';
+  [LM.NOSE,LM.L_SHOULDER,LM.R_SHOULDER,LM.L_WRIST,LM.R_WRIST,LM.L_HIP,LM.R_HIP].forEach(i => {
+    ctx.beginPath();
+    ctx.arc(-lm[i].x*w, lm[i].y*h, 5, 0, Math.PI*2);
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+function computeMetrics(lm){
+  const shoulderWidth = dist(lm[LM.L_SHOULDER], lm[LM.R_SHOULDER]);
+  const hipWidth = dist(lm[LM.L_HIP], lm[LM.R_HIP]);
+  const shoulderHipRatio = shoulderWidth / Math.max(hipWidth, 0.001);
+
+  const shoulderMidY = (lm[LM.L_SHOULDER].y + lm[LM.R_SHOULDER].y) / 2;
+  const shoulderMidX = (lm[LM.L_SHOULDER].x + lm[LM.R_SHOULDER].x) / 2;
+  const hipMidY = (lm[LM.L_HIP].y + lm[LM.R_HIP].y) / 2;
+  const torsoLen = Math.max(Math.abs(hipMidY - shoulderMidY), 0.001);
+
+  const wristSpread = (dist(lm[LM.L_WRIST], {x:shoulderMidX, y:shoulderMidY}) +
+                        dist(lm[LM.R_WRIST], {x:shoulderMidX, y:shoulderMidY})) / 2;
+  const armOpenness = wristSpread / Math.max(shoulderWidth, 0.001);
+
+  const headDrop = (lm[LM.NOSE].y - shoulderMidY) / torsoLen; // more negative = head held higher above shoulders
+
+  if(armCalibration){
+    baseline = { shoulderHipRatio, shoulderMidY, torsoLen, headDrop };
+    armCalibration = false;
+    $('statusLine').textContent = 'Calibrated to current pose as neutral baseline';
+  }
+  if(!baseline){
+    baseline = { shoulderHipRatio, shoulderMidY, torsoLen, headDrop };
+  }
+
+  const shoulderHeightDelta = (baseline.shoulderMidY - shoulderMidY) / torsoLen; // positive = shoulders raised vs baseline
+  const headDropDelta = headDrop - baseline.headDrop; // positive = head dropped lower vs baseline
+
+  // ---- Combine into a single 0-100 openness score ----
+  // Each term is clamped/scaled by hand-picked ranges based on plausible human motion —
+  // these are starting points for tuning, not calibrated against any dataset.
+  const ratioScore   = clamp((shoulderHipRatio - baseline.shoulderHipRatio) * 220, -25, 25);
+  const armScore     = clamp((armOpenness - 0.9) * 40, -20, 25);
+  const heightScore  = clamp(shoulderHeightDelta * 140, -20, 20);
+  const headScore    = clamp(-headDropDelta * 160, -20, 20);
+
+  const raw = 50 + ratioScore + armScore + heightScore + headScore;
+  const score = clamp(raw, 0, 100);
+
+  scoreHistory.push(score);
+  if(scoreHistory.length > 150) scoreHistory.shift();
+
+  $('scoreBig').textContent = Math.round(score);
+  const tag = $('scoreTag');
+  if(score >= 62){ tag.textContent = 'Open / expansive'; tag.className = 'score-tag tag-open'; }
+  else if(score <= 38){ tag.textContent = 'Closed / contracted'; tag.className = 'score-tag tag-closed'; }
+  else { tag.textContent = 'Neutral'; tag.className = 'score-tag tag-neutral'; }
+
+  $('metricShoulderHip').textContent = shoulderHipRatio.toFixed(2);
+  $('fillShoulderHip').style.width = clamp((shoulderHipRatio/2)*100, 0, 100) + '%';
+
+  $('metricArms').textContent = armOpenness.toFixed(2);
+  $('fillArms').style.width = clamp((armOpenness/2.2)*100, 0, 100) + '%';
+
+  $('metricShoulderHeight').textContent = (shoulderHeightDelta >= 0 ? '+' : '') + shoulderHeightDelta.toFixed(2);
+  $('fillShoulderHeight').style.width = clamp(((shoulderHeightDelta+0.3)/0.6)*100, 0, 100) + '%';
+
+  $('metricHeadDrop').textContent = (headDropDelta >= 0 ? '+' : '') + headDropDelta.toFixed(2);
+  $('fillHeadDrop').style.width = clamp(((headDropDelta+0.3)/0.6)*100, 0, 100) + '%';
+
+  drawSpark();
+}
+
+function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
+
+const sparkCanvas = $('sparkCanvas');
+const sparkCtx = sparkCanvas.getContext('2d');
+function drawSpark(){
+  const w = sparkCanvas.clientWidth || 300, h = sparkCanvas.clientHeight || 60;
+  sparkCanvas.width = w; sparkCanvas.height = h;
+  sparkCtx.clearRect(0,0,w,h);
+  if(scoreHistory.length < 2) return;
+  sparkCtx.beginPath();
+  scoreHistory.forEach((s,i) => {
+    const x = (i/(scoreHistory.length-1)) * (w-4) + 2;
+    const y = h - 2 - (s/100)*(h-4);
+    i === 0 ? sparkCtx.moveTo(x,y) : sparkCtx.lineTo(x,y);
+  });
+  sparkCtx.strokeStyle = '#8FA377';
+  sparkCtx.lineWidth = 1.6;
+  sparkCtx.stroke();
+}

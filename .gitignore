@@ -11,10 +11,12 @@ __pycache__/
 *.onnx
 
 # Data & feature caches
-datasets/
-features/
-models/
+/datasets/
+/features/
+/models/
 SIGNALWELL_VOICE/
+!SignalWell/app/models/
+!SignalWell/app/models/**
 
 # Environments & IDEs
 .env

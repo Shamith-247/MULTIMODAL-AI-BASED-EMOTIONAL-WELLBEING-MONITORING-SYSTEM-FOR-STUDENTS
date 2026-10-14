@@ -1,0 +1,60 @@
+<div class="wrap">
+  <header>
+    <div class="badge">standalone test — not wired into the app yet</div>
+    <h1>Posture openness signal</h1>
+    <p>Testing whether a simple geometric heuristic on MediaPipe body-pose landmarks — shoulder width, arm openness, head/shoulder drop — can produce a usable "openness" score, matching the pattern this review paper described: expansive posture reads positive, diminutive/contracted posture reads negative. No training involved; every number below is computed directly from your live pose keypoints.</p>
+  </header>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="video-wrap" id="videoWrap">
+        <video id="video" autoplay muted playsinline></video>
+        <canvas id="canvas"></canvas>
+        <div class="video-overlay-msg" id="overlayMsg">Click "Start camera" to begin. Your video stays in this browser tab — nothing is uploaded or recorded.</div>
+      </div>
+      <div class="controls">
+        <button class="btn" id="startBtn">Start camera</button>
+        <button class="btn ghost" id="calibrateBtn" disabled>Calibrate neutral pose</button>
+        <button class="btn ghost" id="stopBtn" disabled>Stop</button>
+      </div>
+      <div class="status-line" id="statusLine">Idle</div>
+    </div>
+
+    <div class="panel">
+      <h3 style="font-size:.9rem; color:var(--mist); text-transform:none; margin-bottom:2px;">Openness score</h3>
+      <div class="score-big" id="scoreBig">--</div>
+      <div class="score-tag tag-neutral" id="scoreTag">Waiting for pose</div>
+      <canvas class="spark-canvas" id="sparkCanvas"></canvas>
+
+      <div style="margin-top:16px;">
+        <div class="metric-row">
+          <span class="label">Shoulder / hip width ratio</span>
+          <span class="val" id="metricShoulderHip">--</span>
+        </div>
+        <div class="metric-track"><div class="metric-fill" id="fillShoulderHip"></div></div>
+
+        <div class="metric-row" style="margin-top:10px;">
+          <span class="label">Arm openness</span>
+          <span class="val" id="metricArms">--</span>
+        </div>
+        <div class="metric-track"><div class="metric-fill" id="fillArms"></div></div>
+
+        <div class="metric-row" style="margin-top:10px;">
+          <span class="label">Shoulder height (vs. calibrated)</span>
+          <span class="val" id="metricShoulderHeight">--</span>
+        </div>
+        <div class="metric-track"><div class="metric-fill" id="fillShoulderHeight"></div></div>
+
+        <div class="metric-row" style="margin-top:10px;">
+          <span class="label">Head drop</span>
+          <span class="val" id="metricHeadDrop">--</span>
+        </div>
+        <div class="metric-track"><div class="metric-fill" id="fillHeadDrop"></div></div>
+      </div>
+
+      <div class="note">
+        <strong>Why calibration matters:</strong> raw pixel distances depend entirely on how far you're sitting from the camera, so "shoulder height" and "head drop" are measured relative to a neutral baseline you set yourself, not an absolute value. Click <strong>"Calibrate neutral pose"</strong> after starting, sitting in your normal resting position, to set that baseline.
+      </div>
+    </div>
+  </div>
+</div>

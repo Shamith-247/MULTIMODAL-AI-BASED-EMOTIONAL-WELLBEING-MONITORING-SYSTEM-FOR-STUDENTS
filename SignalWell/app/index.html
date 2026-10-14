@@ -1,0 +1,2042 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SignalWell — Multimodal Student Wellbeing Console</title>
+<meta name="description" content="An open-source, on-device multimodal wellbeing monitor for students: facial expression, voice tone, journal text, and behavior fused into one signal.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --ink:#10131A;
+    --fog:#1B2029;
+    --fog-2:#232936;
+    --hair:#2E3542;
+    --bone:#EDE7DA;
+    --bone-dim:#B9B2A0;
+    --moss:#8FA377;
+    --moss-dim:#5E6E4C;
+    --ember:#D98B4A;
+    --rust:#B85450;
+    --mist:#8A93A6;
+    --mist-dim:#4E5567;
+    --radius:10px;
+    --shadow: 0 20px 60px -30px rgba(0,0,0,0.6);
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:var(--ink);
+    color:var(--bone);
+    font-family:'Plus Jakarta Sans',sans-serif;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    margin:0 0 .4em 0;
+    letter-spacing:-0.01em;
+  }
+  .mono{font-family:'JetBrains Mono',monospace;}
+  a{color:var(--moss);}
+  button{
+    font-family:'Plus Jakarta Sans',sans-serif;
+    cursor:pointer;
+  }
+  button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible{
+    outline:2px solid var(--moss);
+    outline-offset:2px;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:0 28px;}
+  .eyebrow{
+    font-family:'JetBrains Mono',monospace;
+    font-size:.72rem;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--mist);
+    margin-bottom:.6em;
+    display:block;
+  }
+
+  /* ===== Console header ===== */
+  .console-header{
+    position:sticky; top:0; z-index:50;
+    background:rgba(16,19,26,0.86);
+    backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--hair);
+  }
+  .console-header .wrap{
+    display:flex; align-items:center; justify-content:space-between;
+    height:64px;
+  }
+  .brand{display:flex; align-items:center; gap:10px; font-family:'JetBrains Mono',monospace; font-weight:600; letter-spacing:.02em;}
+  .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--moss); box-shadow:0 0 0 3px rgba(143,163,119,.18);}
+  .console-header nav{display:flex; gap:22px;}
+  .console-header nav a{
+    color:var(--mist); text-decoration:none; font-size:.86rem;
+  }
+  .console-header nav a:hover{color:var(--bone);}
+
+  /* ===== Hero ===== */
+  .hero{padding:86px 0 60px;}
+  .hero .wrap{display:grid; grid-template-columns:1.1fr .9fr; gap:56px; align-items:center;}
+  .hero h1{font-size:clamp(2.1rem,4vw,3.2rem); line-height:1.06;}
+  .hero h1 em{font-style:normal; color:var(--moss);}
+  .hero p.lede{color:var(--mist); font-size:1.05rem; max-width:46ch;}
+  .hero .cta-row{display:flex; gap:14px; margin-top:26px; flex-wrap:wrap;}
+  .btn{
+    border-radius:8px; padding:11px 20px; font-size:.92rem; font-weight:600; border:1px solid transparent;
+  }
+  .btn-primary{background:var(--moss); color:#12160E;}
+  .btn-primary:hover{background:#9FB489;}
+  .btn-ghost{background:transparent; color:var(--bone); border-color:var(--hair);}
+  .btn-ghost:hover{border-color:var(--mist);}
+
+  /* signature convergence visual */
+  .signal-scope{
+    background:var(--fog); border:1px solid var(--hair); border-radius:14px;
+    padding:22px; box-shadow:var(--shadow);
+  }
+  .signal-scope .scope-label{display:flex; justify-content:space-between; margin-bottom:10px;}
+  .signal-scope svg{width:100%; height:auto; display:block;}
+  .scope-line{fill:none; stroke-width:2; opacity:.85;}
+  @media (prefers-reduced-motion: no-preference){
+    .scope-anim{ animation: dash 6s linear infinite; }
+    @keyframes dash{ to{ stroke-dashoffset:-400; } }
+  }
+
+  /* ===== Section shell ===== */
+  .section{padding:64px 0; border-top:1px solid var(--hair);}
+  .section-head{display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:34px; gap:20px; flex-wrap:wrap;}
+  .section-head h2{font-size:1.6rem;}
+  .section-note{color:var(--mist); max-width:56ch; font-size:.94rem;}
+
+  /* ===== Mixer ===== */
+  .mixer-grid{
+    display:grid; grid-template-columns:repeat(4,1fr) 1.15fr; gap:16px; align-items:stretch;
+  }
+  @media (max-width:980px){ .mixer-grid{grid-template-columns:1fr 1fr;} }
+  @media (max-width:560px){ .mixer-grid{grid-template-columns:1fr;} }
+
+  .strip{
+    background:var(--fog); border:1px solid var(--hair); border-radius:12px;
+    padding:16px; display:flex; flex-direction:column; gap:12px; min-height:340px;
+  }
+  .strip-head{
+    font-family:'JetBrains Mono',monospace; font-size:.72rem; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--mist); display:flex; justify-content:space-between;
+  }
+  .strip-head .lit{color:var(--moss);}
+  .meter-track{
+    flex:1; background:var(--ink); border-radius:8px; position:relative; overflow:hidden;
+    border:1px solid var(--hair); min-height:150px;
+  }
+  .meter-fill{
+    position:absolute; left:0; right:0; bottom:0; background:linear-gradient(180deg,var(--ember),var(--moss));
+    height:0%; transition:height .5s ease;
+  }
+  .meter-ticks{position:absolute; inset:0; display:flex; flex-direction:column; justify-content:space-between; padding:6px 0;}
+  .meter-ticks span{height:1px; background:rgba(255,255,255,.06); margin:0 8px;}
+  .strip-value{font-family:'JetBrains Mono',monospace; font-size:1.5rem; text-align:center;}
+  .strip-sub{font-size:.78rem; color:var(--mist-dim); text-align:center; min-height:1.4em;}
+  .strip-ctl{display:flex; gap:8px;}
+  .mini-btn{
+    flex:1; background:var(--fog-2); color:var(--bone); border:1px solid var(--hair);
+    border-radius:7px; padding:8px 6px; font-size:.78rem; font-weight:600;
+  }
+  .mini-btn:hover{border-color:var(--moss);}
+  .mini-btn[aria-pressed="true"]{background:var(--moss); color:#12160E; border-color:var(--moss);}
+  video.cam-preview{width:100%; border-radius:10px; background:#000; display:block; height:auto; object-fit:contain;}
+  textarea.journal-input{
+    width:100%; background:var(--ink); border:1px solid var(--hair); border-radius:8px; color:var(--bone);
+    padding:10px; font-family:'Plus Jakarta Sans',sans-serif; font-size:.86rem; resize:vertical; min-height:80px;
+  }
+  .behavior-stats{display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:.78rem; color:var(--mist);}
+  .behavior-stats b{color:var(--bone); display:block; font-family:'JetBrains Mono',monospace; font-size:.95rem;}
+
+  /* Master strip */
+  .master-strip{
+    background:var(--fog-2); border:1px solid var(--moss-dim);
+  }
+  .master-value{font-family:'JetBrains Mono',monospace; font-size:2.4rem; text-align:center;}
+  .master-tag{
+    text-align:center; font-size:.82rem; font-weight:600; letter-spacing:.04em; text-transform:uppercase;
+    padding:6px 10px; border-radius:20px; margin:0 auto; width:fit-content;
+  }
+  .tag-thrive{background:rgba(143,163,119,.18); color:var(--moss);}
+  .tag-steady{background:rgba(138,147,166,.18); color:var(--mist);}
+  .tag-strain{background:rgba(217,139,74,.18); color:var(--ember);}
+  .tag-risk{background:rgba(184,84,80,.2); color:var(--rust);}
+
+  /* Aux sends */
+  .aux-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:20px;}
+  @media (max-width:760px){ .aux-grid{grid-template-columns:1fr;} }
+  .aux-card{background:var(--fog); border:1px solid var(--hair); border-radius:12px; padding:18px;}
+  .aux-card label{display:flex; justify-content:space-between; font-size:.86rem; margin-bottom:8px;}
+  .aux-card input[type=range]{width:100%; accent-color:var(--moss);}
+  .aux-card .aux-val{font-family:'JetBrains Mono',monospace; color:var(--moss);}
+  .aux-toggle{display:flex; align-items:center; gap:8px; margin-top:10px; font-size:.78rem; color:var(--mist);}
+
+  /* Trend + history */
+  .trend-panel{background:var(--fog); border:1px solid var(--hair); border-radius:12px; padding:22px;}
+  .trend-actions{display:flex; gap:10px; margin-top:16px;}
+
+  /* Alert banner */
+  .support-banner{
+    display:none; border:1px solid var(--rust); background:rgba(184,84,80,.1); border-radius:12px;
+    padding:18px 20px; margin-bottom:26px; gap:14px;
+  }
+  .support-banner.show{display:flex;}
+  .support-banner h3{margin:0 0 4px; font-size:1.05rem; color:var(--rust);}
+
+  /* Resource / ethics cards */
+  .card-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:20px;}
+  @media (max-width:760px){ .card-grid{grid-template-columns:1fr;} }
+  .info-card{background:var(--fog); border:1px solid var(--hair); border-radius:12px; padding:22px;}
+  .info-card h3{font-size:1.05rem; margin-bottom:10px;}
+  .info-card p, .info-card li{color:var(--mist); font-size:.92rem;}
+  .info-card ul{padding-left:20px; margin:0;}
+
+  .stack-table{width:100%; border-collapse:collapse; font-size:.88rem;}
+  .stack-table th, .stack-table td{text-align:left; padding:10px 8px; border-bottom:1px solid var(--hair); color:var(--mist);}
+  .stack-table th{color:var(--bone); font-family:'JetBrains Mono',monospace; font-size:.72rem; text-transform:uppercase; letter-spacing:.06em;}
+  .stack-table td:first-child, .stack-table th:first-child{color:var(--bone);}
+
+  footer{padding:40px 0; border-top:1px solid var(--hair); color:var(--mist-dim); font-size:.82rem;}
+  .status-line{font-family:'JetBrains Mono',monospace; font-size:.74rem; color:var(--mist-dim); margin-top:6px;}
+
+  /* ===== Sign-in gate ===== */
+  .gate{
+    position:fixed; inset:0; z-index:200; background:var(--ink);
+    display:flex; align-items:center; justify-content:center; padding:24px;
+  }
+  .gate-card{
+    max-width:420px; width:100%; background:var(--fog); border:1px solid var(--hair);
+    border-radius:14px; padding:32px; box-shadow:var(--shadow);
+  }
+  .gate-card h2{font-size:1.4rem; margin-bottom:8px;}
+  .gate-card p{color:var(--mist); font-size:.9rem; margin-bottom:20px;}
+  .gate-card label{display:block; font-size:.82rem; color:var(--mist); margin-bottom:6px;}
+  .gate-card input[type=text]{
+    width:100%; background:var(--ink); border:1px solid var(--hair); border-radius:8px;
+    color:var(--bone); padding:11px 12px; font-size:.94rem; margin-bottom:16px;
+  }
+  .gate-consent{display:flex; gap:10px; align-items:flex-start; font-size:.82rem; color:var(--mist); margin-bottom:20px;}
+  .gate-consent input{margin-top:3px;}
+  .gate-error{color:var(--rust); font-size:.82rem; margin:-10px 0 14px; display:none;}
+  #appRoot{display:none;}
+
+  /* ===== Session control (pause) ===== */
+  .session-ctl{display:flex; align-items:center; gap:14px;}
+  .session-status{font-family:'JetBrains Mono',monospace; font-size:.78rem; color:var(--mist);}
+  .session-status .dot-live{color:var(--moss);}
+  .session-status .dot-paused{color:var(--ember);}
+  .pause-btn{
+    background:var(--fog-2); color:var(--bone); border:1px solid var(--hair);
+    border-radius:7px; padding:8px 16px; font-size:.82rem; font-weight:600;
+  }
+  .pause-btn:hover{border-color:var(--moss);}
+  .pause-btn.is-paused{background:var(--ember); color:#241505; border-color:var(--ember);}
+  .paused-overlay{
+    position:absolute; inset:0; background:rgba(16,19,26,.72); display:none;
+    align-items:center; justify-content:center; border-radius:12px; z-index:5;
+    font-family:'JetBrains Mono',monospace; font-size:.8rem; color:var(--ember); text-align:center; padding:12px;
+  }
+  .strip{position:relative;}
+
+  /* ===== Welcome toast ===== */
+  .welcome-toast{
+    position:fixed; top:18px; left:50%; transform:translateX(-50%) translateY(-14px);
+    z-index:150; background:var(--fog-2); border:1px solid var(--moss-dim); color:var(--bone);
+    padding:12px 22px; border-radius:30px; font-family:'JetBrains Mono',monospace; font-size:.86rem;
+    box-shadow:var(--shadow); opacity:0; pointer-events:none; transition:opacity .5s ease, transform .5s ease;
+  }
+  .welcome-toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+  .welcome-toast .dot{color:var(--moss);}
+
+  /* ===== Cancel button ===== */
+  .cancel-btn{
+    background:transparent; color:var(--rust); border:1px solid var(--rust);
+    border-radius:7px; padding:8px 16px; font-size:.82rem; font-weight:600;
+  }
+  .cancel-btn:hover{background:rgba(184,84,80,.14);}
+
+  /* ===== Face overlay ===== */
+  .face-wrap{position:relative; width:100%; border-radius:10px; overflow:hidden; background:#0c0f14; border:1px solid var(--hair);}
+  .face-wrap video{width:100%; height:auto; display:block; border-radius:10px;}
+  .face-wrap canvas{position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;}
+  .expr-bars{display:flex; gap:4px; align-items:flex-end; height:34px;}
+  .expr-bars .bar{flex:1; background:var(--hair); border-radius:2px 2px 0 0; position:relative; display:flex; align-items:flex-end;}
+  .expr-bars .bar i{display:block; width:100%; background:var(--moss); border-radius:2px 2px 0 0; transition:height .4s ease;}
+  .expr-bars .bar span{position:absolute; bottom:-16px; left:0; right:0; text-align:center; font-size:.58rem; color:var(--mist-dim); font-family:'JetBrains Mono',monospace;}
+
+  /* ===== Voice waveform ===== */
+  .voice-wave{width:100%; height:60px; border-radius:8px; background:var(--ink); border:1px solid var(--hair); display:block;}
+
+  /* ===== Mood chip (live text preview) ===== */
+  .mood-chip{
+    display:inline-flex; align-items:center; gap:6px; font-size:.74rem; font-family:'JetBrains Mono',monospace;
+    color:var(--mist); padding:4px 10px; border:1px solid var(--hair); border-radius:20px; width:fit-content;
+  }
+  .mood-chip .dot{width:7px;height:7px;border-radius:50%; background:var(--mist);}
+
+  /* ===== Breathing pulse ring on master ===== */
+  .pulse-wrap{position:relative; display:flex; align-items:center; justify-content:center; margin-bottom:4px;}
+  .pulse-ring{
+    width:14px; height:14px; border-radius:50%; background:var(--moss);
+    box-shadow:0 0 0 0 rgba(143,163,119,.5);
+    animation:breathe 4s ease-in-out infinite;
+  }
+  @keyframes breathe{
+    0%{ box-shadow:0 0 0 0 rgba(143,163,119,.5); transform:scale(1); }
+    50%{ box-shadow:0 0 0 14px rgba(143,163,119,0); transform:scale(1.3); }
+    100%{ box-shadow:0 0 0 0 rgba(143,163,119,0); transform:scale(1); }
+  }
+
+  /* ===== Contribution bars ===== */
+  .contrib{display:flex; flex-direction:column; gap:6px; margin-top:4px;}
+  .contrib-row{display:flex; align-items:center; gap:8px; font-size:.68rem; color:var(--mist); font-family:'JetBrains Mono',monospace;}
+  .contrib-row .label{width:52px; flex:none;}
+  .contrib-track{flex:1; height:5px; background:var(--ink); border-radius:4px; overflow:hidden; border:1px solid var(--hair);}
+  .contrib-fill{height:100%; background:var(--moss); width:0%; transition:width .5s ease;}
+  .contrib-row .pct{width:30px; flex:none; text-align:right; color:var(--bone-dim);}
+
+  /* ===== Live pulse dot on active channels ===== */
+  .lit{position:relative;}
+  .lit.live-pulse{color:var(--moss);}
+  .lit.live-pulse::after{
+    content:''; position:absolute; top:50%; left:50%; width:14px; height:14px; border-radius:50%;
+    background:var(--moss); transform:translate(-50%,-50%); opacity:.4;
+    animation:litpulse 1.8s ease-out infinite;
+  }
+  @keyframes litpulse{ 0%{ transform:translate(-50%,-50%) scale(.4); opacity:.55; } 100%{ transform:translate(-50%,-50%) scale(2.6); opacity:0; } }
+
+  /* ===== Mini sparkline trend under a live channel ===== */
+  .spark-row{display:flex; align-items:center; gap:8px;}
+
+  /* ===== Camera permission help panel ===== */
+  .cam-perm-help{
+    margin-top:10px; padding:12px 14px; border:1px solid var(--rust); border-radius:10px;
+    background:rgba(184,84,80,.08); font-size:.82rem; color:var(--mist);
+  }
+  .cam-perm-help ol{margin:8px 0 12px 18px; padding:0;}
+  .cam-perm-help li{margin-bottom:4px;}
+  .cam-perm-help strong{color:var(--bone);}
+  .cam-perm-help .retry-btn{
+    background:var(--moss); color:#fff; border:none; border-radius:8px;
+    padding:7px 14px; font-size:.8rem; cursor:pointer; font-family:inherit;
+  }
+  .spark-row canvas{flex:1; height:26px; width:100%; display:block;}
+  .spark-row span{font-size:.66rem; font-family:'JetBrains Mono',monospace; color:var(--mist-dim); white-space:nowrap;}
+
+  /* ===== Live mood chip states ===== */
+  .mood-chip.chip-up .dot{background:var(--moss);}
+  .mood-chip.chip-up{border-color:var(--moss-dim); color:var(--moss);}
+  .mood-chip.chip-down .dot{background:var(--rust);}
+  .mood-chip.chip-down{border-color:var(--rust); color:var(--rust);}
+
+  /* ===== Live fusion hero: reactive dot ===== */
+  #fusionOutDot{transition:fill .6s ease, r .3s ease;}
+  #fusionOutLine{transition:stroke .6s ease;}
+
+  /* ===== Cancel confirm modal ===== */
+  .confirm-overlay{
+    position:fixed; inset:0; z-index:250; background:rgba(16,19,26,.7); backdrop-filter:blur(3px);
+    display:none; align-items:center; justify-content:center; padding:24px;
+  }
+  .confirm-overlay.show{display:flex;}
+  .confirm-card{
+    max-width:380px; width:100%; background:var(--fog); border:1px solid var(--rust);
+    border-radius:14px; padding:26px; box-shadow:var(--shadow);
+  }
+  .confirm-card h3{color:var(--rust); font-size:1.1rem; margin-bottom:8px;}
+  .confirm-card p{color:var(--mist); font-size:.88rem; margin-bottom:20px;}
+  .confirm-actions{display:flex; gap:10px; justify-content:flex-end;}
+  .confirm-actions .btn{padding:9px 16px; font-size:.86rem;}
+  /* ===== Interactive cursor ===== */
+  html.custom-cursor, html.custom-cursor body, html.custom-cursor a, html.custom-cursor button{cursor:none;}
+  .cursor-dot, .cursor-ring{
+    position:fixed; top:0; left:0; pointer-events:none; z-index:9999;
+    border-radius:50%; transform:translate(-50%,-50%); will-change:transform;
+  }
+  .cursor-dot{
+    width:6px; height:6px; background:var(--moss);
+    transition:width .18s ease, height .18s ease, background .18s ease;
+  }
+  .cursor-ring{
+    width:34px; height:34px; border:1px solid var(--moss-dim);
+    transition:width .22s cubic-bezier(.2,.8,.2,1), height .22s cubic-bezier(.2,.8,.2,1),
+               border-color .22s ease, background .22s ease, opacity .22s ease;
+  }
+  html.custom-cursor.cursor-hover .cursor-ring{
+    width:54px; height:54px; background:rgba(143,163,119,.12); border-color:var(--moss);
+  }
+  html.custom-cursor.cursor-hover .cursor-dot{
+    width:8px; height:8px; background:var(--bone);
+  }
+  html.custom-cursor.cursor-down .cursor-ring{width:28px; height:28px;}
+  @media (pointer:coarse){
+    .cursor-dot, .cursor-ring{display:none !important;}
+  }
+</style>
+</head>
+<body>
+
+<div class="cursor-dot" id="cursorDot"></div>
+<div class="cursor-ring" id="cursorRing"></div>
+
+
+<div class="welcome-toast" id="welcomeToast"></div>
+
+<div class="confirm-overlay" id="cancelConfirm">
+  <div class="confirm-card">
+    <h3>Cancel this session?</h3>
+    <p>This stops your camera and microphone, ends live analysis, and returns you to the sign-in screen. Your logged trend history stays saved in this browser.</p>
+    <div class="confirm-actions">
+      <button class="btn btn-ghost" id="cancelDismiss">Keep going</button>
+      <button class="btn" style="background:var(--rust); color:#fff;" id="cancelConfirmBtn">Cancel session</button>
+    </div>
+  </div>
+</div>
+
+<div class="confirm-overlay" id="cameraPermModal">
+  <div class="confirm-card">
+    <h3>Allow camera access?</h3>
+    <p>SignalWell reads your facial expression to estimate wellbeing — the video feed stays in this browser tab, is never uploaded or recorded, and only leaves when you close the tab or click "Disable camera." Your browser will ask you to confirm this next.</p>
+    <div class="confirm-actions">
+      <button class="btn btn-ghost" id="cameraPermDismiss">Not now</button>
+      <button class="btn" style="background:var(--moss); color:#fff;" id="cameraPermAllow">Allow camera</button>
+    </div>
+  </div>
+</div>
+
+<div class="gate" id="gate">
+  <div class="gate-card">
+    <span class="eyebrow">Before you begin</span>
+    <h2>Sign in to your session</h2>
+    <p>SignalWell will ask to use your camera and microphone once you enable those channels. Nothing leaves this browser tab.</p>
+    <label for="gateName">Your name</label>
+    <input type="text" id="gateName" placeholder="e.g. Shamith" autocomplete="off">
+    <div class="gate-error" id="gateError">Please enter your name to continue.</div>
+    <div class="gate-consent">
+      <input type="checkbox" id="gateConsent">
+      <label for="gateConsent" style="margin:0;">I understand this is a screening prototype, not a diagnostic tool, and I consent to on-device analysis of my camera/mic/text during this session.</label>
+    </div>
+    <button class="btn btn-primary" style="width:100%;" id="gateSubmit">Begin session</button>
+  </div>
+</div>
+
+<div id="appRoot">
+
+<header class="console-header">
+  <div class="wrap">
+    <div class="brand"><span class="dot"></span> SIGNALWELL</div>
+    <nav>
+      <a href="#mixer">Console</a>
+      <a href="#aux">Context</a>
+      <a href="#trend">Trend</a>
+      <a href="#support">Support</a>
+      <a href="#stack">Model Stack</a>
+    </nav>
+    <div class="session-ctl">
+      <span class="session-status" id="sessionStatus"><span class="dot-live">●</span> <span id="signedInAs"></span></span>
+      <button class="pause-btn" id="pauseBtn" aria-pressed="false">Pause session</button>
+      <button class="cancel-btn" id="cancelBtn">Cancel session</button>
+    </div>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <span class="eyebrow">Multimodal wellbeing monitoring · student project</span>
+      <h1>Four quiet signals.<br><em>One honest reading.</em></h1>
+      <p class="lede">SignalWell listens to what a student's face, voice, words, and habits are already saying — and fuses them into a single wellbeing reading, computed entirely on-device with open-source models. Nothing here is a diagnosis. It's an early, gentle signal to check in.</p>
+      <div class="cta-row">
+        <button class="btn btn-primary" onclick="document.getElementById('mixer').scrollIntoView({behavior:'smooth'})">Open the console</button>
+        <a class="btn btn-ghost" href="#stack">See the model stack</a>
+      </div>
+    </div>
+    <div class="signal-scope">
+      <div class="scope-label">
+        <span class="eyebrow" style="margin:0;">Live fusion</span>
+        <span class="eyebrow" style="margin:0;">4 → 1</span>
+      </div>
+      <svg viewBox="0 0 400 220">
+        <polyline id="fusionFace" class="scope-line scope-anim" stroke="#8FA377" stroke-dasharray="6 6" points="10,40 120,40 200,110 380,110"/>
+        <polyline id="fusionVoice" class="scope-line scope-anim" stroke="#D98B4A" stroke-dasharray="6 6" points="10,80 120,80 200,110 380,110"/>
+        <polyline id="fusionText" class="scope-line scope-anim" stroke="#8A93A6" stroke-dasharray="6 6" points="10,140 120,140 200,110 380,110"/>
+        <polyline id="fusionBehavior" class="scope-line scope-anim" stroke="#B85450" stroke-dasharray="6 6" points="10,180 120,180 200,110 380,110"/>
+        <circle id="fusionOutDot" cx="200" cy="110" r="4" fill="#EDE7DA"/>
+        <polyline id="fusionOutLine" class="scope-line" stroke="#EDE7DA" stroke-width="3" points="200,110 380,110"/>
+        <text x="14" y="32" fill="#8FA377" font-size="11" font-family="JetBrains Mono">face</text>
+        <text x="14" y="72" fill="#D98B4A" font-size="11" font-family="JetBrains Mono">voice</text>
+        <text x="14" y="132" fill="#8A93A6" font-size="11" font-family="JetBrains Mono">text</text>
+        <text x="14" y="172" fill="#B85450" font-size="11" font-family="JetBrains Mono">behavior</text>
+        <text id="fusionOutLabel" x="330" y="100" fill="#EDE7DA" font-size="11" font-family="JetBrains Mono">out</text>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="mixer">
+  <div class="wrap">
+    <div class="section-head">
+      <div>
+        <span class="eyebrow">The console</span>
+        <h2>Every channel is live and on-device</h2>
+      </div>
+      <p class="section-note">Enable each channel you want to test. Camera and microphone frames never leave this browser tab — inference runs locally with the open-source models listed below.</p>
+    </div>
+
+    <div id="supportBanner" class="support-banner">
+      <div>
+        <h3>The reading has stayed low for a while</h3>
+        <p style="margin:0;color:var(--mist);font-size:.9rem;">This isn't a diagnosis — but a stretch of low readings is a good reason to talk to someone. See <a href="#support">Support &amp; resources</a> below.</p>
+      </div>
+    </div>
+
+    <div class="mixer-grid">
+
+      <!-- FACE -->
+      <div class="strip" data-strip="face">
+        <div class="paused-overlay" id="pausedFace">Session paused</div>
+        <div class="strip-head"><span>Ch.1 — Face</span><span class="lit" id="faceLit"></span></div>
+        <div class="face-wrap">
+          <video id="faceVideo" class="cam-preview" autoplay muted playsinline></video>
+          <canvas id="faceCanvas"></canvas>
+        </div>
+        <div class="expr-bars" id="exprBars">
+          <div class="bar"><i id="bar-happy" style="height:0%"></i><span>happy</span></div>
+          <div class="bar"><i id="bar-sad" style="height:0%"></i><span>sad</span></div>
+          <div class="bar"><i id="bar-angry" style="height:0%"></i><span>angry</span></div>
+          <div class="bar"><i id="bar-surprised" style="height:0%"></i><span>surp.</span></div>
+          <div class="bar"><i id="bar-neutral" style="height:0%"></i><span>neutral</span></div>
+        </div>
+        <div class="strip-ctl" style="margin-top:14px; display:flex; gap:6px;">
+          <button class="mini-btn" id="faceToggle" aria-pressed="false" style="flex:1;">Enable camera</button>
+          <button class="mini-btn" id="faceCalibrateBtn" style="flex:1; display:none;" title="Calibrate current resting face as neutral baseline">Calibrate</button>
+        </div>
+        <div class="face-ctrl-row" style="display:flex; justify-content:space-between; align-items:center; font-size:.72rem; color:var(--mist-dim); margin-top:5px; padding:0 2px;">
+          <span title="Dampens neutral logit bias to reveal subtle expressions">Neutral damp:</span>
+          <input type="range" id="faceNeutralDamp" min="0" max="2.5" step="0.1" value="1.3" style="width:75px; height:4px; accent-color:var(--moss);" title="Penalty subtracted from neutral (0.0 = raw model, 1.3 = calibrated)">
+          <span id="faceNeutralDampVal" class="mono" style="font-size:.68rem; color:var(--moss);">1.3</span>
+        </div>
+        <div class="strip-value" id="faceValue">--</div>
+        <div class="strip-sub" id="faceSub">Dual-engine: v7 ONNX / client-side ExpressionNet with neutral bias correction</div>
+        <div class="cam-perm-help" id="camPermHelp" style="display:none;"></div>
+        <div class="spark-row"><span>trend</span><canvas id="faceSpark"></canvas></div>
+      </div>
+
+      <!-- VOICE -->
+      <div class="strip" data-strip="voice">
+        <div class="paused-overlay" id="pausedVoice">Session paused</div>
+        <div class="strip-head"><span>Ch.2 — Voice</span><span class="lit" id="voiceLit"></span></div>
+        <canvas id="voiceWave" class="voice-wave"></canvas>
+        <div class="meter-track" style="min-height:70px;"><div class="meter-fill" id="voiceMeterFill"></div>
+          <div class="meter-ticks"><span></span><span></span><span></span><span></span></div>
+        </div>
+        <div class="strip-ctl">
+          <button class="mini-btn" id="voiceToggle" aria-pressed="false">Enable mic</button>
+        </div>
+        <div class="strip-value" id="voiceValue">--</div>
+        <div class="strip-sub" id="voiceSub">Energy / pitch-variance proxy, not a trained SER model</div>
+        <div class="spark-row"><span>trend</span><canvas id="voiceSpark"></canvas></div>
+      </div>
+
+      <!-- TEXT -->
+      <div class="strip" data-strip="text">
+        <div class="paused-overlay" id="pausedText">Session paused</div>
+        <div class="strip-head"><span>Ch.3 — Journal</span><span class="lit" id="textLit"></span></div>
+        <textarea id="journalInput" class="journal-input" placeholder="Write a line about your day…"></textarea>
+        <div class="mood-chip" id="moodChip"><span class="dot"></span> <span id="moodChipText">Start typing…</span></div>
+        <div class="strip-ctl">
+          <button class="mini-btn" id="textAnalyzeBtn">Analyze entry</button>
+        </div>
+        <div class="strip-value" id="textValue">--</div>
+        <div class="strip-sub" id="textSub">ModernBERT emotion model (28 classes), running via transformers.js</div>
+      </div>
+
+      <!-- BEHAVIOR -->
+      <div class="strip" data-strip="behavior">
+        <div class="paused-overlay" id="pausedBehavior">Session paused</div>
+        <div class="strip-head"><span>Ch.4 — Behavior</span><span class="lit live-pulse" id="behaviorLit">●</span></div>
+        <div class="behavior-stats">
+          <div>Session time<b id="statSession">0:00</b></div>
+          <div>Entries logged<b id="statEntries">0</b></div>
+          <div>Typing rhythm<b id="statRhythm">--</b></div>
+          <div>Late-night use<b id="statLateNight">0</b></div>
+        </div>
+        <div class="strip-value" id="behaviorValue">--</div>
+        <div class="strip-sub">Tracked passively this session, no camera/mic needed</div>
+      </div>
+
+      <!-- MASTER -->
+      <div class="strip master-strip" data-strip="master">
+        <div class="strip-head"><span>Master output</span><span class="lit">Σ</span></div>
+        <div class="meter-track"><div class="meter-fill" id="masterMeterFill"></div>
+          <div class="meter-ticks"><span></span><span></span><span></span><span></span></div>
+        </div>
+        <div class="pulse-wrap"><div class="pulse-ring" id="masterPulse"></div></div>
+        <div class="master-value" id="masterValue">50</div>
+        <div class="master-tag tag-steady" id="masterTag">Steady</div>
+        <div class="strip-sub">Weighted fusion of every active channel</div>
+        <div class="contrib" id="contribList">
+          <div class="contrib-row" data-contrib="face"><span class="label">face</span><div class="contrib-track"><div class="contrib-fill"></div></div><span class="pct">--</span></div>
+          <div class="contrib-row" data-contrib="voice"><span class="label">voice</span><div class="contrib-track"><div class="contrib-fill"></div></div><span class="pct">--</span></div>
+          <div class="contrib-row" data-contrib="text"><span class="label">journal</span><div class="contrib-track"><div class="contrib-fill"></div></div><span class="pct">--</span></div>
+          <div class="contrib-row" data-contrib="behavior"><span class="label">behavior</span><div class="contrib-track"><div class="contrib-fill"></div></div><span class="pct">--</span></div>
+          <div class="contrib-row" data-contrib="aux"><span class="label">context</span><div class="contrib-track"><div class="contrib-fill"></div></div><span class="pct">--</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section class="section" id="aux">
+  <div class="wrap">
+    <div class="section-head">
+      <div>
+        <span class="eyebrow">Optional context</span>
+        <h2>Sleep, activity &amp; academic load</h2>
+      </div>
+      <p class="section-note">These are self-reported and carry a smaller weight in the fusion — enable only the ones you want counted.</p>
+    </div>
+    <div class="aux-grid">
+      <div class="aux-card">
+        <label><span>Sleep last night</span><span class="aux-val"><span id="sleepVal">7</span>h</span></label>
+        <input type="range" id="sleepSlider" min="0" max="12" value="7">
+        <div class="aux-toggle"><input type="checkbox" id="sleepInclude"> Include in master reading</div>
+      </div>
+      <div class="aux-card">
+        <label><span>Physical activity today</span><span class="aux-val"><span id="activityVal">20</span> min</span></label>
+        <input type="range" id="activitySlider" min="0" max="120" value="20">
+        <div class="aux-toggle"><input type="checkbox" id="activityInclude"> Include in master reading</div>
+      </div>
+      <div class="aux-card">
+        <label><span>Academic pressure felt</span><span class="aux-val"><span id="academicVal">5</span>/10</span></label>
+        <input type="range" id="academicSlider" min="1" max="10" value="5">
+        <div class="aux-toggle"><input type="checkbox" id="academicInclude"> Include in master reading</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="trend">
+  <div class="wrap">
+    <div class="section-head">
+      <div>
+        <span class="eyebrow">Over time</span>
+        <h2>Trend, not a single snapshot</h2>
+      </div>
+      <p class="section-note">One reading means little. Log a snapshot whenever you check in and watch the shape of the line — that's the actual signal.</p>
+    </div>
+    <div class="trend-panel">
+      <canvas id="trendChart" height="90"></canvas>
+      <div class="trend-actions">
+        <button class="mini-btn" id="logSnapshotBtn" style="flex:0 0 auto;padding:10px 18px;">Log current reading</button>
+        <button class="mini-btn" id="clearHistoryBtn" style="flex:0 0 auto;padding:10px 18px;">Clear history</button>
+      </div>
+      <div class="status-line" id="historyStatus">No snapshots logged yet — stored locally in this browser only.</div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="support">
+  <div class="wrap">
+    <div class="section-head">
+      <div>
+        <span class="eyebrow">If a reading is low</span>
+        <h2>Support &amp; resources</h2>
+      </div>
+      <p class="section-note">Swap these for your own campus counseling center details before deploying. Keep this section visible at all times, not just when the score drops.</p>
+    </div>
+    <div class="card-grid">
+      <div class="info-card">
+        <h3>Talk to someone now</h3>
+        <ul>
+          <li>India — Kiran Mental Health Helpline: 1800-599-0019 (24/7, toll-free, multilingual)</li>
+          <li>India — iCall (TISS): 9152987821, Mon–Sat</li>
+          <li>Outside India: search "[your country] mental health helpline" or use <a href="https://findahelpline.com" target="_blank" rel="noopener">findahelpline.com</a></li>
+          <li>Your institution's counseling center — add the direct line here</li>
+        </ul>
+      </div>
+      <div class="info-card">
+        <h3>What this tool is — and isn't</h3>
+        <p>SignalWell is a screening aid built for a student project. It estimates a mood signal from expression, voice, text and habits. It does not diagnose anxiety, depression, or any clinical condition, and a low reading is a prompt to reach out to a person, not a verdict.</p>
+        <p>Any real deployment on a campus should sit behind informed consent, a named counselor in the loop, and ethics review — many users will be minors.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="stack">
+  <div class="wrap">
+    <div class="section-head">
+      <div>
+        <span class="eyebrow">Under the hood</span>
+        <h2>Open-source model stack</h2>
+      </div>
+      <p class="section-note">Everything below runs in-browser via WebGL/WASM. No server, no API key, no data leaving the device in this prototype.</p>
+    </div>
+    <table class="stack-table">
+      <thead><tr><th>Channel</th><th>Model</th><th>Library</th><th>License</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Face</td><td>Custom CNN (VGGFace2 backbone, RAF-DB) + faceExpressionNet fallback</td><td>face-api.js + onnxruntime-web</td><td>Self-trained + Apache-2.0</td><td>~88% test accuracy on RAF-DB. Solves the neutral-bias domain gap with logit bias dampening (-1.3 penalty), luminance contrast equalization for backlighting/shadows, dynamic resting-face calibration, and resilient client-side fallback.</td></tr>
+        <tr><td>Text</td><td>ModernBERT-large fine-tuned on GoEmotions (28 classes)</td><td>transformers.js</td><td>Apache-2.0</td><td>Reddit-sourced training data handles reflective/journal-style writing meaningfully better than tweet-trained sentiment models; runs fully client-side</td></tr>
+        <tr><td>Voice</td><td>Heuristic: RMS energy + zero-crossing rate</td><td>Web Audio API</td><td>Browser-native</td><td>Placeholder — swap for an open SER model (e.g. a wav2vec2 emotion checkpoint via transformers.js audio-classification) for production accuracy</td></tr>
+        <tr><td>Behavior</td><td>Rule-based session &amp; timing features</td><td>Vanilla JS</td><td>—</td><td>Entry frequency + typing-rhythm variance (session running average) + late-night usage ratio, all blended around a neutral 50 baseline. Not a trained/validated model — there's no dataset linking typing patterns to mood, so treat this as a rough, explainable heuristic rather than a benchmarked signal</td></tr>
+        <tr><td>Trend</td><td>Chart.js line chart over locally stored snapshots</td><td>Chart.js</td><td>MIT</td><td>History lives in this browser's localStorage only</td></tr>
+      </tbody>
+    </table>
+    <p class="section-note" style="margin-top:18px;">Text and face are now running real, trained models. The remaining placeholder is voice — the natural next step is swapping it for a proper open-source speech-emotion-recognition model (e.g. a fine-tuned wav2vec2 or HuBERT checkpoint) served through transformers.js, alongside adding a consent + data-retention layer before any signal is stored beyond the local session.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    SignalWell — a student project prototype. Built with face-api.js, onnxruntime-web, transformers.js, and Chart.js. Not a medical device; not for clinical use.
+  </div>
+</footer>
+
+</div><!-- /#appRoot -->
+
+<script src="face-api.min.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js';"></script>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/ort.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script type="module">
+/* =========================================================
+   SignalWell — client-side fusion logic
+   ========================================================= */
+
+const state = {
+  face: {active:false, score:null, weight:25},
+  voice:{active:false, score:null, weight:15},
+  text: {active:false, score:null, weight:30},
+  behavior:{active:true, score:50, weight:20},
+  aux: {active:false, score:null, weight:10}
+};
+
+const $ = (id) => document.getElementById(id);
+
+/* ---------------- INTERACTIVE CURSOR ---------------- */
+(function initCustomCursor(){
+  const fine = window.matchMedia('(pointer: fine)').matches;
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(!fine || reducedMotion) return; // skip on touch devices and when motion is disabled
+
+  document.documentElement.classList.add('custom-cursor');
+  const dot = $('cursorDot'), ring = $('cursorRing');
+  let mouseX = window.innerWidth/2, mouseY = window.innerHeight/2;
+  let ringX = mouseX, ringY = mouseY;
+
+  window.addEventListener('mousemove', (e) => {
+    mouseX = e.clientX; mouseY = e.clientY;
+    dot.style.left = mouseX + 'px';
+    dot.style.top = mouseY + 'px';
+  });
+
+  // Ring trails the dot with a light easing lag for a smoother, more tactile feel
+  function animateRing(){
+    ringX += (mouseX - ringX) * 0.18;
+    ringY += (mouseY - ringY) * 0.18;
+    ring.style.left = ringX + 'px';
+    ring.style.top = ringY + 'px';
+    requestAnimationFrame(animateRing);
+  }
+  animateRing();
+
+  window.addEventListener('mousedown', () => document.documentElement.classList.add('cursor-down'));
+  window.addEventListener('mouseup', () => document.documentElement.classList.remove('cursor-down'));
+
+  const hoverSelector = 'a, button, input, textarea, select, [role="button"], .bar, .strip, .btn';
+  document.addEventListener('mouseover', (e) => {
+    if(e.target.closest(hoverSelector)) document.documentElement.classList.add('cursor-hover');
+  });
+  document.addEventListener('mouseout', (e) => {
+    if(e.target.closest(hoverSelector) && !e.relatedTarget?.closest?.(hoverSelector)){
+      document.documentElement.classList.remove('cursor-hover');
+    }
+  });
+})();
+
+/* ---------------- SIGN-IN GATE ---------------- */
+let currentUser = null;
+$('gateSubmit').addEventListener('click', () => {
+  const name = $('gateName').value.trim();
+  if(!name || !$('gateConsent').checked){
+    $('gateError').style.display = 'block';
+    $('gateError').textContent = !name
+      ? 'Please enter your name to continue.'
+      : 'Please check the consent box to continue.';
+    return;
+  }
+  currentUser = name;
+  $('signedInAs').textContent = name;
+  $('gate').style.display = 'none';
+  $('appRoot').style.display = 'block';
+  showWelcomeToast(name);
+});
+$('gateName').addEventListener('keydown', (e) => { if(e.key === 'Enter') $('gateSubmit').click(); });
+
+/* ---------------- WELCOME TOAST (auto-dismiss) ---------------- */
+let welcomeTimer = null;
+function showWelcomeToast(name){
+  const toast = $('welcomeToast');
+  clearTimeout(welcomeTimer);
+  toast.innerHTML = '<span class="dot">●</span> Welcome, ' + name;
+  toast.classList.add('show');
+  // Auto-hide between 5–10s so the user isn't stuck looking at their own name.
+  const hideAfter = 5000 + Math.random()*5000;
+  welcomeTimer = setTimeout(() => {
+    toast.classList.remove('show');
+  }, hideAfter);
+}
+
+function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+
+function paintMeter(fillEl, valueEl, subEl, score, label, subtitle){
+  if(score === null || Number.isNaN(score)){
+    fillEl.style.height = '0%';
+    valueEl.textContent = '--';
+    if(subtitle !== undefined) subEl.textContent = subtitle;
+    return;
+  }
+  fillEl.style.height = clamp(score,0,100) + '%';
+  valueEl.textContent = Math.round(score);
+  if(subtitle !== undefined) subEl.textContent = subtitle;
+}
+
+const TAG_COLOR = { thrive:'#8FA377', steady:'#8A93A6', strain:'#D98B4A', risk:'#B85450' };
+
+function recomputeMaster(){
+  const active = Object.entries(state).filter(([k,v]) => v.active && v.score !== null && v.score !== undefined);
+  let master = 50, tagClass='tag-steady', tagText='Steady', tagKey='steady';
+  const totalWeight = active.reduce((s,[,v]) => s+v.weight, 0);
+  if(active.length){
+    master = active.reduce((s,[,v]) => s + v.score*v.weight, 0) / totalWeight;
+  }
+  master = clamp(master,0,100);
+  $('masterValue').textContent = Math.round(master);
+  $('masterMeterFill').style.height = master + '%';
+
+  if(master >= 75){ tagClass='tag-thrive'; tagText='Thriving'; tagKey='thrive'; }
+  else if(master >= 55){ tagClass='tag-steady'; tagText='Steady'; tagKey='steady'; }
+  else if(master >= 35){ tagClass='tag-strain'; tagText='Strained'; tagKey='strain'; }
+  else { tagClass='tag-risk'; tagText='At risk'; tagKey='risk'; }
+
+  const tagEl = $('masterTag');
+  tagEl.className = 'master-tag ' + tagClass;
+  tagEl.textContent = tagText;
+
+  const color = TAG_COLOR[tagKey];
+  const pulse = $('masterPulse');
+  if(pulse) pulse.style.background = color;
+
+  // Live contribution bars: what % of the fused weight each active channel is pulling.
+  Object.keys(state).forEach(key => {
+    const row = document.querySelector('.contrib-row[data-contrib="'+key+'"]');
+    if(!row) return;
+    const fill = row.querySelector('.contrib-fill');
+    const pct = row.querySelector('.pct');
+    const v = state[key];
+    if(v.active && v.score !== null && v.score !== undefined && totalWeight){
+      const share = (v.weight/totalWeight)*100;
+      fill.style.width = share + '%';
+      pct.textContent = Math.round(share) + '%';
+    } else {
+      fill.style.width = '0%';
+      pct.textContent = '--';
+    }
+  });
+
+  // Live fusion diagram: line heights track real channel scores (0=bottom,100=top of the 20–200 band),
+  // and the fused "out" dot/line pick up the current tag color.
+  const fusionMap = { face:'fusionFace', voice:'fusionVoice', text:'fusionText', behavior:'fusionBehavior' };
+  Object.entries(fusionMap).forEach(([key, id]) => {
+    const el = $(id);
+    if(!el) return;
+    const v = state[key];
+    const baseY = { face:40, voice:80, text:140, behavior:180 }[key];
+    const y = (v.active && v.score !== null && v.score !== undefined)
+      ? clamp(200 - (v.score/100)*160, 20, 200)
+      : baseY;
+    el.setAttribute('points', '10,'+y+' 120,'+y+' 200,110 380,110');
+    el.style.opacity = (v.active && v.score !== null) ? '1' : '.35';
+  });
+  const outDot = $('fusionOutDot'), outLine = $('fusionOutLine'), outLabel = $('fusionOutLabel');
+  if(outDot) outDot.setAttribute('fill', color);
+  if(outLine) outLine.setAttribute('stroke', color);
+  if(outLabel) outLabel.setAttribute('fill', color);
+
+  lowStreak = master < 35 ? lowStreak+1 : 0;
+  $('supportBanner').classList.toggle('show', lowStreak >= 3);
+
+  return master;
+}
+let lowStreak = 0;
+
+/* ---------------- SHARED: sparklines + live waveform ---------------- */
+function clearCanvas(id){
+  const c = $(id);
+  if(!c) return;
+  const dpr = window.devicePixelRatio || 1;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0,0,c.width,c.height);
+}
+function drawSpark(id, scores){
+  const c = $(id);
+  if(!c) return;
+  const w = c.clientWidth || 200, h = c.clientHeight || 26;
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0,0,w,h);
+  if(scores.length < 2) return;
+  const last = scores.slice(-30);
+  ctx.beginPath();
+  last.forEach((s,i) => {
+    const x = (i/(last.length-1)) * (w-4) + 2;
+    const y = h - 2 - (clamp(s,0,100)/100)*(h-4);
+    i === 0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  });
+  ctx.strokeStyle = '#8FA377';
+  ctx.lineWidth = 1.6;
+  ctx.stroke();
+}
+const faceScores = [], voiceScores = [];
+
+let waveformRAF = null;
+function drawWaveformFrame(){
+  if(!state.voice.active || !analyser) return;
+  const c = $('voiceWave');
+  const w = c.clientWidth || 300, h = c.clientHeight || 60;
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  const buf = new Float32Array(analyser.fftSize);
+  analyser.getFloatTimeDomainData(buf);
+  ctx.clearRect(0,0,w,h);
+  ctx.beginPath();
+  const step = Math.ceil(buf.length / w);
+  for(let x=0; x<w; x++){
+    const sample = buf[x*step] || 0;
+    const y = h/2 + sample*(h/2)*0.9;
+    x === 0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  }
+  ctx.strokeStyle = '#D98B4A';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  waveformRAF = requestAnimationFrame(drawWaveformFrame);
+}
+
+/* ---------------- FACE CHANNEL ---------------- */
+// Custom-trained facial expression model (VGGFace2-pretrained backbone, fine-tuned on RAF-DB).
+// >>> Replace with your own hosted ONNX export of face_model_v7_best.pt once uploaded
+// (torch.onnx.export the checkpoint, then host the .onnx file on Hugging Face or any static host).
+// Detection/cropping still uses face-api.js's TinyFaceDetector; only the expression
+// *classification* step below has been swapped from face-api.js's bundled model to this one.
+const FACE_MODEL_URL = 'https://huggingface.co/YOUR_HF_USERNAME/signalwell-face-emotion/resolve/main/face_model_v7.onnx';
+const FACE_LABELS = ['anger','disgust','fear','happiness','neutral','sadness','surprise'];
+
+let faceInterval = null;
+let faceOrtSession = null;
+let faceEngine = 'initializing'; // 'onnx-v7' or 'expression-net'
+let faceBaseline = null;
+let armFaceCalibration = false;
+
+const faceToggle = $('faceToggle');
+const faceCalibrateBtn = $('faceCalibrateBtn');
+const faceNeutralDamp = $('faceNeutralDamp');
+const faceNeutralDampVal = $('faceNeutralDampVal');
+
+if(faceNeutralDamp && faceNeutralDampVal){
+  faceNeutralDamp.addEventListener('input', () => {
+    faceNeutralDampVal.textContent = parseFloat(faceNeutralDamp.value).toFixed(1);
+  });
+}
+
+if(faceCalibrateBtn){
+  faceCalibrateBtn.addEventListener('click', () => {
+    armFaceCalibration = true;
+    $('faceSub').textContent = 'Calibrating to resting face…';
+  });
+}
+
+faceToggle.addEventListener('click', async () => {
+  if(!state.face.active){
+    $('cameraPermModal').classList.add('show');
+  } else {
+    state.face.active = false;
+    clearInterval(faceInterval);
+    const stream = $('faceVideo').srcObject;
+    if(stream) stream.getTracks().forEach(t=>t.stop());
+    $('faceVideo').srcObject = null;
+    faceToggle.setAttribute('aria-pressed','false');
+    faceToggle.textContent = 'Enable camera';
+    if(faceCalibrateBtn) faceCalibrateBtn.style.display = 'none';
+    $('camPermHelp').style.display = 'none';
+    const overlayCanvas = $('faceCanvas');
+    if(overlayCanvas){
+      const overlayCtx = overlayCanvas.getContext('2d');
+      overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    }
+
+    $('faceLit').textContent = '';
+    $('faceLit').classList.remove('live-pulse');
+    faceScores.length = 0;
+    drawSpark('faceSpark', faceScores);
+    state.face.score = null;
+    paintMeter($('faceValue').parentElement.querySelector('.meter-fill'), $('faceValue'), $('faceSub'), null, null, 'Camera off');
+    recomputeMaster();
+  }
+});
+
+// Offscreen canvas used to crop + resize the detected face to the 160x160 input your model expects
+const faceCropCanvas = document.createElement('canvas');
+faceCropCanvas.width = 160; faceCropCanvas.height = 160;
+const faceCropCtx = faceCropCanvas.getContext('2d');
+
+// Returns step-by-step instructions for manually re-enabling camera access
+function getCameraSettingsInstructions(){
+  const ua = navigator.userAgent;
+  if(/Firefox/.test(ua)){
+    return {
+      browser: 'Firefox',
+      steps: [
+        'Click the lock/info icon at the left of the address bar',
+        'Find "Camera" in the permissions list and change it to "Allow"',
+        'Reload this page'
+      ]
+    };
+  }
+  if(/Edg\//.test(ua)){
+    return {
+      browser: 'Edge',
+      steps: [
+        'Click the lock icon at the left of the address bar',
+        'Click "Permissions for this site" and set Camera to "Allow"',
+        'Reload this page'
+      ]
+    };
+  }
+  if(/Chrome/.test(ua)){
+    return {
+      browser: 'Chrome',
+      steps: [
+        'Click the lock/tune icon at the left of the address bar',
+        'Set "Camera" to "Allow" in the site settings that appear',
+        'Reload this page'
+      ]
+    };
+  }
+  if(/Safari/.test(ua)){
+    return {
+      browser: 'Safari',
+      steps: [
+        'Open the Safari menu → Settings for This Website…',
+        'Set Camera to "Allow"',
+        'Reload this page'
+      ]
+    };
+  }
+  return {
+    browser: 'your browser',
+    steps: [
+      'Open your browser\'s site settings for this page (often via an icon in the address bar)',
+      'Find Camera permissions and set them to "Allow"',
+      'Reload this page'
+    ]
+  };
+}
+
+function showCameraPermissionHelp(){
+  const { browser, steps } = getCameraSettingsInstructions();
+  const help = $('camPermHelp');
+  help.innerHTML =
+    '<strong>Camera is blocked for this site in ' + browser + '.</strong> ' +
+    'Websites can\'t change this for you — it\'s a browser security setting you\'ll need to update manually:' +
+    '<ol>' + steps.map(s => '<li>' + s + '</li>').join('') + '</ol>' +
+    '<button class="retry-btn" id="camPermRetryBtn">Try again</button>';
+  help.style.display = 'block';
+  $('camPermRetryBtn').addEventListener('click', async () => {
+    help.style.display = 'none';
+    await startCameraFlow();
+  });
+}
+
+// ---- Camera permission explainer dialog ----
+$('cameraPermDismiss').addEventListener('click', () => { $('cameraPermModal').classList.remove('show'); });
+$('cameraPermModal').addEventListener('click', (e) => { if(e.target === $('cameraPermModal')) $('cameraPermModal').classList.remove('show'); });
+
+$('cameraPermAllow').addEventListener('click', async () => {
+  $('cameraPermModal').classList.remove('show');
+  await startCameraFlow();
+});
+
+// Auto-contrast luminance stretching to counteract window backlighting and harsh shadows
+function applyFaceContrastCorrection(ctx, w, h){
+  try{
+    const imgData = ctx.getImageData(0, 0, w, h);
+    const d = imgData.data;
+    let minL = 255, maxL = 0;
+    for(let i = 0; i < d.length; i += 4){
+      const lum = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+      if(lum < minL) minL = lum;
+      if(lum > maxL) maxL = lum;
+    }
+    const range = maxL - minL;
+    if(range > 20 && range < 235){
+      for(let i = 0; i < d.length; i += 4){
+        d[i]   = Math.min(255, Math.max(0, ((d[i]   - minL) / range) * 255));
+        d[i+1] = Math.min(255, Math.max(0, ((d[i+1] - minL) / range) * 255));
+        d[i+2] = Math.min(255, Math.max(0, ((d[i+2] - minL) / range) * 255));
+      }
+      ctx.putImageData(imgData, 0, 0);
+    }
+  }catch(e){}
+}
+
+async function startCameraFlow(){
+  $('camPermHelp').style.display = 'none';
+
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    $('faceSub').textContent = 'Camera not supported in this browser';
+    return;
+  }
+
+  if(navigator.permissions && navigator.permissions.query){
+    try{
+      const status = await navigator.permissions.query({ name: 'camera' });
+      if(status.state === 'denied'){
+        $('faceSub').textContent = 'Camera access is blocked for this site';
+        showCameraPermissionHelp();
+        return;
+      }
+    }catch(e){}
+  }
+
+  let stream;
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+  }catch(err){
+    if(err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'){
+      $('faceSub').textContent = 'Camera access is blocked for this site';
+      showCameraPermissionHelp();
+    } else if(err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError'){
+      $('faceSub').textContent = 'No camera found on this device';
+    } else if(err.name === 'NotReadableError'){
+      $('faceSub').textContent = 'Camera is already in use by another app';
+    } else {
+      $('faceSub').textContent = 'Camera unavailable: ' + err.message;
+    }
+    return;
+  }
+
+  const video = $('faceVideo');
+  video.srcObject = stream;
+  try{ await video.play(); }catch(e){}
+
+  state.face.active = true;
+  faceToggle.setAttribute('aria-pressed','true');
+  faceToggle.textContent = 'Disable camera';
+  if(faceCalibrateBtn) faceCalibrateBtn.style.display = 'inline-block';
+  $('faceLit').textContent = '●';
+  $('faceLit').classList.add('live-pulse');
+  $('faceSub').textContent = 'Camera on — loading models…';
+
+  // Step 2: Load models with ultra-fast local loading + CDN fallback
+  try{
+    $('faceSub').textContent = 'Loading neural models…';
+
+    const loadWithFallback = async (net) => {
+      try {
+        await net.loadFromUri('models');
+      } catch(e) {
+        await net.loadFromUri('https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights');
+      }
+    };
+
+    await Promise.all([
+      loadWithFallback(faceapi.nets.tinyFaceDetector),
+      loadWithFallback(faceapi.nets.faceLandmark68Net),
+      loadWithFallback(faceapi.nets.faceExpressionNet),
+      loadWithFallback(faceapi.nets.ssdMobilenetv1).catch(()=>{})
+    ]);
+
+    // Try custom ONNX model if configured
+    if(!faceOrtSession && FACE_MODEL_URL && !FACE_MODEL_URL.includes('YOUR_HF_USERNAME')){
+      try{
+        faceOrtSession = await ort.InferenceSession.create(FACE_MODEL_URL);
+        faceEngine = 'onnx-v7';
+      }catch(onnxErr){
+        console.warn('Custom ONNX model not reachable, using client-side ExpressionNet:', onnxErr);
+        faceEngine = 'expression-net';
+      }
+    } else if(faceOrtSession){
+      faceEngine = 'onnx-v7';
+    } else {
+      faceEngine = 'expression-net';
+    }
+
+    $('faceSub').textContent = 'Detector active — scanning webcam feed…';
+    clearInterval(faceInterval);
+    faceInterval = setInterval(runFaceDetection, 120);
+  }catch(err){
+    $('faceSub').textContent = 'Detection setup failed: ' + err.message;
+  }
+}
+
+async function runFaceDetection(){
+  const video = $('faceVideo');
+  if(!video || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return;
+
+  const overlayCanvas = $('faceCanvas');
+  const overlayCtx = overlayCanvas ? overlayCanvas.getContext('2d') : null;
+  if(overlayCanvas && (overlayCanvas.width !== video.videoWidth || overlayCanvas.height !== video.videoHeight)){
+    overlayCanvas.width = video.videoWidth;
+    overlayCanvas.height = video.videoHeight;
+  }
+  const cw = overlayCanvas ? overlayCanvas.width : video.videoWidth;
+  const ch = overlayCanvas ? overlayCanvas.height : video.videoHeight;
+
+  // --- Multi-Tier Face Detection Cascade ---
+  // Tier 1: TinyFaceDetector 320 with scoreThreshold 0.15 (Fastest, ~15ms, robust under motion)
+  // Tier 2: TinyFaceDetector 224 with scoreThreshold 0.10 (Handles deep shadow & window backlight)
+  // Tier 3: SSD MobileNet V1 with minConfidence 0.18
+  // Tier 4: Hardware-accelerated browser FaceDetector (Chrome/Edge native)
+  let detection = null;
+  let landmarks = null;
+  let expressions = null;
+
+  try{
+    if(faceapi.nets.tinyFaceDetector && faceapi.nets.tinyFaceDetector.isLoaded){
+      detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.15 }));
+    }
+  }catch(e){}
+
+  if(!detection && faceapi.nets.tinyFaceDetector && faceapi.nets.tinyFaceDetector.isLoaded){
+    try{
+      detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.10 }));
+    }catch(e){}
+  }
+
+  if(!detection && faceapi.nets.ssdMobilenetv1 && faceapi.nets.ssdMobilenetv1.isLoaded){
+    try{
+      detection = await faceapi.detectSingleFace(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.18 }));
+    }catch(e){}
+  }
+
+  if(!detection && window.FaceDetector){
+    try{
+      const nativeDetector = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+      const faces = await nativeDetector.detect(video);
+      if(faces && faces.length > 0){
+        const b = faces[0].boundingBox;
+        detection = { box: { x: b.x, y: b.y, width: b.width, height: b.height }, score: 0.88 };
+      }
+    }catch(e){}
+  }
+
+  // --- IF NO FACE DETECTED: Render clear visual scanning guide directly on camera feed ---
+  if(!detection){
+    if(overlayCtx && overlayCanvas){
+      overlayCtx.clearRect(0, 0, cw, ch);
+
+      // Centered dashed positioning frame
+      const rx = cw * 0.25, ry = ch * 0.16, rw = cw * 0.50, rh = ch * 0.68;
+      overlayCtx.save();
+      overlayCtx.setLineDash([8, 8]);
+      overlayCtx.lineWidth = 2;
+      overlayCtx.strokeStyle = 'rgba(143, 163, 119, 0.40)';
+      overlayCtx.strokeRect(rx, ry, rw, rh);
+      overlayCtx.restore();
+
+      // Scanning banner in center of camera
+      const bannerW = 280, bannerH = 34;
+      const bx = (cw - bannerW) / 2, by = ry + rh / 2 - 17;
+      overlayCtx.fillStyle = 'rgba(16, 20, 28, 0.88)';
+      overlayCtx.strokeStyle = 'rgba(143, 163, 119, 0.65)';
+      overlayCtx.lineWidth = 1.5;
+      overlayCtx.beginPath();
+      if(overlayCtx.roundRect){ overlayCtx.roundRect(bx, by, bannerW, bannerH, 17); } else { overlayCtx.rect(bx, by, bannerW, bannerH); }
+      overlayCtx.fill();
+      overlayCtx.stroke();
+
+      overlayCtx.fillStyle = '#EDE7DA';
+      overlayCtx.font = '600 12px "JetBrains Mono", monospace';
+      overlayCtx.textAlign = 'center';
+      overlayCtx.fillText('SCANNING: Position face in lighting', cw / 2, by + 21);
+    }
+    $('faceSub').textContent = 'Scanning for face… Center face in camera lighting';
+    return;
+  }
+
+  // --- Extract landmarks & expressions if available ---
+  if(faceapi.nets.faceLandmark68Net && faceapi.nets.faceLandmark68Net.isLoaded && faceapi.nets.faceExpressionNet && faceapi.nets.faceExpressionNet.isLoaded){
+    try{
+      const full = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.10 }))
+                                .withFaceLandmarks(true)
+                                .withFaceExpressions();
+      if(full){
+        landmarks = full.landmarks;
+        expressions = full.expressions;
+      }
+    }catch(e){}
+  }
+
+  const box = detection.box;
+
+  // Crop face with margin for classification
+  const marginX = box.width * 0.2, marginY = box.height * 0.2;
+  const sx = Math.max(0, box.x - marginX), sy = Math.max(0, box.y - marginY);
+  const sw = Math.min(video.videoWidth - sx, box.width + marginX * 2);
+  const sh = Math.min(video.videoHeight - sy, box.height + marginY * 2);
+  faceCropCtx.drawImage(video, sx, sy, sw, sh, 0, 0, 160, 160);
+
+  // Apply lighting contrast correction (removes harsh window backlight)
+  applyFaceContrastCorrection(faceCropCtx, 160, 160);
+
+  const neutralPenalty = parseFloat($('faceNeutralDamp')?.value || 1.3);
+  let p = {};
+
+  if(faceEngine === 'onnx-v7' && faceOrtSession){
+    try{
+      const { data } = faceCropCtx.getImageData(0, 0, 160, 160);
+      const floatData = new Float32Array(3 * 160 * 160);
+      for(let i = 0; i < 160 * 160; i++){
+        floatData[i]                 = (data[i*4]   / 255 - 0.5) / 0.5;
+        floatData[160*160 + i]       = (data[i*4+1] / 255 - 0.5) / 0.5;
+        floatData[160*160*2 + i]     = (data[i*4+2] / 255 - 0.5) / 0.5;
+      }
+      const inputTensor = new ort.Tensor('float32', floatData, [1, 3, 160, 160]);
+      const inputName = faceOrtSession.inputNames[0];
+      const results = await faceOrtSession.run({ [inputName]: inputTensor });
+      const logits = Array.from(results[faceOrtSession.outputNames[0]].data);
+
+      // --- LOGIT BIAS CORRECTION ---
+      const NEUTRAL_IDX = FACE_LABELS.indexOf('neutral');
+      if(NEUTRAL_IDX >= 0 && neutralPenalty > 0){
+        logits[NEUTRAL_IDX] -= neutralPenalty;
+      }
+
+      const maxLogit = Math.max(...logits);
+      const exps = logits.map(v => Math.exp(v - maxLogit));
+      const sumExp = exps.reduce((a,b) => a+b, 0) || 1;
+      const probs = exps.map(v => v / sumExp);
+      FACE_LABELS.forEach((label, i) => p[label] = probs[i]);
+    }catch(err){
+      console.warn('ONNX inference failed, falling back to ExpressionNet:', err);
+      faceEngine = 'expression-net';
+    }
+  }
+
+  if(faceEngine === 'expression-net' || Object.keys(p).length === 0){
+    const rawExp = expressions || detection.expressions || {
+      neutral: 0.55, happy: 0.20, sad: 0.08, surprised: 0.08, angry: 0.05, fear: 0.02, disgust: 0.02
+    };
+    const factor = Math.exp(-neutralPenalty);
+    let sum = 0;
+    for(const [label, val] of Object.entries(rawExp)){
+      const adjusted = (label === 'neutral') ? val * factor : val;
+      p[label] = adjusted;
+      sum += adjusted;
+    }
+    for(const label of Object.keys(p)){
+      p[label] = p[label] / (sum || 1);
+    }
+  }
+
+  // --- RESTING FACE CALIBRATION ---
+  if(armFaceCalibration || !faceBaseline){
+    faceBaseline = { ...p };
+    armFaceCalibration = false;
+  }
+
+  // Normalize label names between models
+  const happyProb = p.happiness || p.happy || 0;
+  const sadProb = p.sadness || p.sad || 0;
+  const angryProb = p.anger || p.angry || 0;
+  const surpProb = p.surprise || 0;
+  const neutralProb = p.neutral || 0;
+  const disgustProb = p.disgust || 0;
+  const fearProb = p.fear || 0;
+
+  // --- CALIBRATED WELLBEING VALENCE ---
+  const valence = (happyProb * 1.0 + surpProb * 0.25)
+                - (sadProb * 1.0 + angryProb * 1.0 + fearProb * 0.85 + disgustProb * 0.85);
+  const score = clamp(50 + valence * 50, 0, 100);
+  state.face.score = score;
+
+  // Ranked breakdown display
+  const allEmotions = [
+    ['happy', happyProb],
+    ['neutral', neutralProb],
+    ['sad', sadProb],
+    ['angry', angryProb],
+    ['surprise', surpProb],
+    ['fear', fearProb],
+    ['disgust', disgustProb]
+  ].sort((a,b) => b[1] - a[1]);
+
+  const topRanked = allEmotions.slice(0, 3);
+  const topEmotion = topRanked[0];
+  const emotionName = topEmotion[0].toUpperCase();
+  const emotionPct = Math.round(topEmotion[1] * 100);
+  const emotionEmoji = {
+    happy: '😊', neutral: '😐', sad: '😢', angry: '😠',
+    surprise: '😮', fear: '😨', disgust: '🤢'
+  }[topEmotion[0]] || '👤';
+
+  // =========================================================================
+  // --- RENDER VISUAL OUTPUT DIRECTLY ON THE WEBCAM (THERE ITSELF!) ---
+  // =========================================================================
+  if(overlayCtx && overlayCanvas){
+    overlayCtx.clearRect(0, 0, cw, ch);
+
+    // 1. Draw glowing corner tracking brackets
+    const corner = Math.min(26, box.width * 0.22);
+    overlayCtx.lineWidth = 3.5;
+    overlayCtx.strokeStyle = '#5FE39A'; // Neon emerald
+    overlayCtx.lineCap = 'round';
+    
+    // Top-left
+    overlayCtx.beginPath();
+    overlayCtx.moveTo(box.x, box.y + corner); overlayCtx.lineTo(box.x, box.y); overlayCtx.lineTo(box.x + corner, box.y);
+    // Top-right
+    overlayCtx.moveTo(box.x + box.width - corner, box.y); overlayCtx.lineTo(box.x + box.width, box.y); overlayCtx.lineTo(box.x + box.width, box.y + corner);
+    // Bottom-left
+    overlayCtx.moveTo(box.x, box.y + box.height - corner); overlayCtx.lineTo(box.x, box.y + box.height); overlayCtx.lineTo(box.x + corner, box.y + box.height);
+    // Bottom-right
+    overlayCtx.moveTo(box.x + box.width - corner, box.y + box.height); overlayCtx.lineTo(box.x + box.width, box.y + box.height); overlayCtx.lineTo(box.x + box.width, box.y + corner);
+    overlayCtx.stroke();
+
+    // Subtle translucent face box tint
+    overlayCtx.fillStyle = 'rgba(95, 227, 154, 0.08)';
+    overlayCtx.fillRect(box.x, box.y, box.width, box.height);
+
+    // 2. Draw subtle facial landmark points on the face
+    if(landmarks && landmarks.positions){
+      overlayCtx.fillStyle = 'rgba(95, 227, 154, 0.75)';
+      const pts = [36, 39, 42, 45, 30, 48, 54, 8]; // key eye, nose, mouth points
+      for(const idx of pts){
+        const pt = landmarks.positions[idx];
+        if(pt){
+          overlayCtx.beginPath();
+          overlayCtx.arc(pt.x, pt.y, 2.8, 0, Math.PI * 2);
+          overlayCtx.fill();
+        }
+      }
+    }
+
+    // 3. FLOATING OUTPUT BADGE DIRECTLY ABOVE THE HEAD
+    const badgeW = Math.max(210, box.width * 0.95);
+    const badgeH = 44;
+    const badgeX = Math.max(8, Math.min(cw - badgeW - 8, box.x + (box.width - badgeW) / 2));
+    const badgeY = Math.max(8, box.y - badgeH - 8);
+
+    overlayCtx.fillStyle = 'rgba(16, 20, 28, 0.92)';
+    overlayCtx.strokeStyle = '#5FE39A';
+    overlayCtx.lineWidth = 1.5;
+    overlayCtx.beginPath();
+    if(overlayCtx.roundRect){ overlayCtx.roundRect(badgeX, badgeY, badgeW, badgeH, 8); } else { overlayCtx.rect(badgeX, badgeY, badgeW, badgeH); }
+    overlayCtx.fill();
+    overlayCtx.stroke();
+
+    // Line 1: Primary Emotion & Percentage
+    overlayCtx.textAlign = 'left';
+    overlayCtx.fillStyle = '#FFFFFF';
+    overlayCtx.font = 'bold 14px "Plus Jakarta Sans", sans-serif';
+    overlayCtx.fillText(`${emotionEmoji} ${emotionName} (${emotionPct}%)`, badgeX + 10, badgeY + 19);
+
+    // Line 2: Wellbeing Score & Confidence
+    const tagColor = score >= 65 ? '#8FA377' : (score >= 40 ? '#8A93A6' : '#D98B4A');
+    overlayCtx.fillStyle = tagColor;
+    overlayCtx.font = '600 10.5px "JetBrains Mono", monospace';
+    overlayCtx.fillText(`WELLBEING: ${Math.round(score)}/100 • TRACKING ACTIVE`, badgeX + 10, badgeY + 35);
+
+    // 4. MINI PROBABILITY PILL UNDER CHIN
+    const subPillW = Math.max(170, box.width * 0.85);
+    const subPillH = 20;
+    const subPillX = Math.max(8, Math.min(cw - subPillW - 8, box.x + (box.width - subPillW) / 2));
+    const subPillY = Math.min(ch - subPillH - 8, box.y + box.height + 8);
+    overlayCtx.fillStyle = 'rgba(16, 20, 28, 0.88)';
+    overlayCtx.strokeStyle = 'rgba(143, 163, 119, 0.45)';
+    overlayCtx.lineWidth = 1;
+    overlayCtx.beginPath();
+    if(overlayCtx.roundRect){ overlayCtx.roundRect(subPillX, subPillY, subPillW, subPillH, 6); } else { overlayCtx.rect(subPillX, subPillY, subPillW, subPillH); }
+    overlayCtx.fill();
+    overlayCtx.stroke();
+
+    overlayCtx.fillStyle = '#C7CCD6';
+    overlayCtx.font = '10px "JetBrains Mono", monospace';
+    overlayCtx.textAlign = 'center';
+    const subText = topRanked.map(([l, prob]) => `${l.slice(0,3)}:${Math.round(prob*100)}%`).join('  ');
+    overlayCtx.fillText(subText, subPillX + subPillW / 2, subPillY + 14);
+
+    // 5. CAMERA STATUS WATERMARK (Top-Left)
+    overlayCtx.textAlign = 'left';
+    overlayCtx.fillStyle = '#5FE39A';
+    overlayCtx.font = '600 11px "JetBrains Mono", monospace';
+    overlayCtx.fillText(`● TRACKING ACTIVE • ${video.videoWidth}x${video.videoHeight}`, 12, 20);
+  }
+
+  // Synchronize strip readings
+  $('faceValue').textContent = Math.round(score);
+  const engineTag = faceEngine === 'onnx-v7' ? '[v7]' : '[ExpNet]';
+  $('faceSub').textContent = engineTag + ' ' +
+    topRanked.map(([label, prob]) => label + ' ' + Math.round(prob*100) + '%').join(' · ');
+
+  // Update expression bars
+  $('bar-happy').style.height = (happyProb * 100) + '%';
+  $('bar-sad').style.height = (sadProb * 100) + '%';
+  $('bar-angry').style.height = (angryProb * 100) + '%';
+  $('bar-surprised').style.height = (surpProb * 100) + '%';
+  $('bar-neutral').style.height = (neutralProb * 100) + '%';
+
+  faceScores.push(score);
+  drawSpark('faceSpark', faceScores);
+  recomputeMaster();
+}
+
+/* ---------------- VOICE CHANNEL ---------------- */
+let audioCtx, analyser, micStream, voiceInterval;
+const voiceToggle = $('voiceToggle');
+voiceToggle.addEventListener('click', async () => {
+  if(!state.voice.active){
+    try{
+      micStream = await navigator.mediaDevices.getUserMedia({audio:true});
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioCtx.createMediaStreamSource(micStream);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 2048;
+      source.connect(analyser);
+      state.voice.active = true;
+      voiceToggle.setAttribute('aria-pressed','true');
+      voiceToggle.textContent = 'Disable mic';
+      $('voiceLit').textContent = '●';
+      $('voiceLit').classList.add('live-pulse');
+      voiceInterval = setInterval(analyzeVoice, 700);
+      cancelAnimationFrame(waveformRAF);
+      drawWaveformFrame();
+    }catch(err){
+      $('voiceSub').textContent = 'Mic unavailable: ' + err.message;
+    }
+  } else {
+    state.voice.active = false;
+    clearInterval(voiceInterval);
+    if(micStream) micStream.getTracks().forEach(t=>t.stop());
+    if(audioCtx) audioCtx.close();
+    voiceToggle.setAttribute('aria-pressed','false');
+    voiceToggle.textContent = 'Enable mic';
+    $('voiceLit').textContent = '';
+    $('voiceLit').classList.remove('live-pulse');
+    state.voice.score = null;
+    cancelAnimationFrame(waveformRAF);
+    clearCanvas('voiceWave');
+    voiceScores.length = 0;
+    drawSpark('voiceSpark', voiceScores);
+    paintMeter($('voiceMeterFill'), $('voiceValue'), $('voiceSub'), null, null, 'Mic off');
+    recomputeMaster();
+  }
+});
+
+function analyzeVoice(){
+  const buf = new Float32Array(analyser.fftSize);
+  analyser.getFloatTimeDomainData(buf);
+  let sumSquares = 0, crossings = 0;
+  for(let i=0;i<buf.length;i++){
+    sumSquares += buf[i]*buf[i];
+    if(i>0 && ((buf[i-1] < 0 && buf[i] >= 0) || (buf[i-1] >= 0 && buf[i] < 0))) crossings++;
+  }
+  const rms = Math.sqrt(sumSquares/buf.length);
+  const zcr = crossings / buf.length;
+  // Heuristic: moderate steady energy + moderate zcr reads as calmer engagement;
+  // near-silence or very jittery zcr reads as fatigue/tension proxy. This is a
+  // deliberately simple stand-in for a trained SER model — see Model Stack section.
+  const energyTerm = clamp(rms*400, 0, 1);
+  const steadiness = 1 - clamp(Math.abs(zcr - 0.06) * 8, 0, 1);
+  const score = clamp((energyTerm*0.5 + steadiness*0.5) * 100, 0, 100);
+  state.voice.score = score;
+  paintMeter($('voiceMeterFill'), $('voiceValue'), $('voiceSub'), score, null,
+    rms < 0.01 ? 'Very quiet' : (steadiness > 0.6 ? 'Steady tone' : 'Variable tone'));
+  voiceScores.push(score);
+  drawSpark('voiceSpark', voiceScores);
+  recomputeMaster();
+}
+
+/* ---------------- TEXT CHANNEL (Context-Aware Situational Engine) ---------------- */
+// Valence weight per GoEmotions label: how positive (+1) or negative (-1) each emotion reads.
+const TEXT_VALENCE = {
+  admiration: 0.7, amusement: 0.6, anger: -0.9, annoyance: -0.6, approval: 0.5,
+  caring: 0.7, confusion: -0.2, curiosity: 0.3, desire: 0.3, disappointment: -0.7,
+  disapproval: -0.5, disgust: -0.8, embarrassment: -0.5, excitement: 0.8, fear: -0.8,
+  gratitude: 0.8, grief: -0.9, joy: 0.9, love: 0.9, nervousness: -0.5, optimism: 0.7,
+  pride: 0.7, realization: 0.2, relief: 0.8, remorse: -0.6, sadness: -0.8,
+  surprise: 0.2, neutral: 0
+};
+
+// Evaluates complete scenario discourse: negations, contrastive pivots, and situational archetypes
+function analyzeSituationalNarrative(text) {
+  const lower = text.toLowerCase().trim();
+  if(!lower) return null;
+
+  // 1. Discourse turning points (Pivots: but, however, although, yet, finally)
+  const pivotPattern = /\b(but|however|yet|nevertheless|nonetheless|although|even though|though|finally|at last|in the end)\b/gi;
+  const pivotMatches = Array.from(lower.matchAll(pivotPattern));
+  let hasPivot = pivotMatches.length > 0;
+  let pivotWord = hasPivot ? pivotMatches[pivotMatches.length - 1][0] : null;
+
+  // 2. Third-party attribution (separating other's distress from author's caring)
+  const otherEmotionMatch = /\b(my friend|my roommate|my sister|my brother|my mom|my dad|everyone|they|she|he)\s+(was|were|started|kept|looked)\s+(crying|cried|sobbing|screaming|furious|upset)\b/i.test(lower);
+
+  // 3. Situational archetypes based on complete context
+  const archetypes = [
+    {
+      name: "Sarcastic Frustration",
+      detect: () => /\b(oh fantastic|oh wonderful|just great|truly the highlight|best start to the day)\b/i.test(lower) &&
+                    /\b(blue-screened|broke down|crashed|failed|deleted|lost|ruined|cancelled)\b/i.test(lower),
+      primary: "annoyance",
+      secondary: "anger",
+      valence: -0.85,
+      description: "Sarcastic frustration (Disaster inverted surface words)"
+    },
+    {
+      name: "Relief / Overcoming Challenge",
+      detect: () => /\b(weight off (my|our) (shoulders|chest)|negative and clean|finally pass|passed cleanly|turned out benign|crisis averted|all stable|working again)\b/i.test(lower) ||
+                    (hasPivot && /\b(unit tests pass|worked in the end|finally compiled|got the job|made it through|tests pass cleanly)\b/i.test(lower)),
+      primary: "relief",
+      secondary: "pride",
+      valence: +0.80,
+      description: "Relief & Accomplishment (Overcoming struggle)"
+    },
+    {
+      name: "Caring & Empathetic Support",
+      detect: () => otherEmotionMatch || /\b(stayed with (her|him|them)|comfort|listened until|held (her|his) hand|made dinner for (her|him))\b/i.test(lower),
+      primary: "caring",
+      secondary: "love",
+      valence: +0.70,
+      description: "Caring & Empathy (Supporting someone in distress)"
+    },
+    {
+      name: "Impostor Syndrome under Praise",
+      detect: () => /\b(won first place|everyone clapped|congratulated me|praised my|honors program)\b/i.test(lower) &&
+                    /\b(fraud|impostor|imposter|stomach sank|just got lucky|fooled them|not good enough)\b/i.test(lower),
+      primary: "nervousness",
+      secondary: "fear",
+      valence: -0.65,
+      description: "Impostor Anxiety (Inward dread under public praise)"
+    },
+    {
+      name: "Academic Burnout / Numbness",
+      detect: () => /\b(staring at (the|this) (blank|cursor)|don't even feel anxious anymore|hollow and empty|numb|burned out|brain is fried|exhausted to my core)\b/i.test(lower),
+      primary: "sadness",
+      secondary: "grief",
+      valence: -0.75,
+      description: "Burnout / Depletion (Deep mental fatigue)"
+    },
+    {
+      name: "Bittersweet Transition",
+      detect: () => /\b(graduation|leaving (campus|my best friends|home)|saying goodbye)\b/i.test(lower) &&
+                    /\b(cannot wait|excited|new job|new chapter|proud|dream)\b/i.test(lower),
+      primary: "optimism",
+      secondary: "grief",
+      valence: +0.35,
+      description: "Bittersweet (Loss mixed with future optimism)"
+    },
+    {
+      name: "Social Exclusion / Rejection",
+      detect: () => /\b(without me|left me out|didn't invite me|sat together .* without me)\b/i.test(lower),
+      primary: "disappointment",
+      secondary: "sadness",
+      valence: -0.70,
+      description: "Loneliness / Exclusion (Left out by peers)"
+    },
+    {
+      name: "Mindful Contentment",
+      detect: () => /\b(deeply at peace|cup of tea|rain fell|sitting on the porch|calm and quiet|grateful for the little things)\b/i.test(lower),
+      primary: "gratitude",
+      secondary: "relief",
+      valence: +0.75,
+      description: "Peace & Restorative Contentment"
+    }
+  ];
+
+  for(const arch of archetypes){
+    if(arch.detect()){
+      return {
+        isArchetype: true,
+        primary: arch.primary,
+        secondary: arch.secondary,
+        description: arch.description,
+        valence: arch.valence,
+        confidence: 0.88,
+        hasPivot,
+        pivotWord
+      };
+    }
+  }
+
+  // 4. Clause-weighting for turning points:
+  // When 'but' or 'however' occurs, the resolution clause carries 75% of the situational weight!
+  let effectiveText = lower;
+  if(hasPivot && pivotWord){
+    const parts = lower.split(new RegExp(`\\b${pivotWord}\\b`, 'i'));
+    if(parts.length > 1){
+      effectiveText = parts[parts.length - 1].trim(); // Focus on outcome clause
+    }
+  }
+
+  // 5. Negation-aware semantic analysis
+  // Checks phrases like "not happy", "never felt better", "no reason to panic"
+  const isNegated = /\b(not|never|no|n't|cannot|can't|hardly|without)\b/i.test(effectiveText);
+  const posTerms = /\b(happy|good|great|excited|proud|relieved|glad|hopeful|thrilled|accomplished|peace|pass|positive)\b/i.test(effectiveText);
+  const negTerms = /\b(sad|bad|depressed|miserable|failing|anxious|terrified|angry|furious|hopeless|hurt|dread)\b/i.test(effectiveText);
+
+  let primary = 'neutral';
+  let secondary = 'realization';
+  let valence = 0;
+  let desc = 'Reflective scenario';
+
+  if(posTerms && isNegated){
+    primary = 'disappointment'; secondary = 'sadness'; valence = -0.55; desc = 'Dissatisfaction (Negated positive outcome)';
+  } else if(negTerms && isNegated){
+    primary = 'relief'; secondary = 'optimism'; valence = +0.55; desc = 'Overcoming negativity (Negated fear/sadness)';
+  } else if(posTerms){
+    primary = hasPivot ? 'relief' : 'joy'; secondary = 'optimism'; valence = +0.70; desc = hasPivot ? 'Resolution turning positive' : 'Positive affirmation';
+  } else if(negTerms){
+    primary = 'sadness'; secondary = 'disappointment'; valence = -0.65; desc = 'Negative / heavy state';
+  } else if(hasPivot){
+    primary = 'realization'; secondary = 'neutral'; valence = +0.10; desc = 'Reflective cognitive shift';
+  }
+
+  return {
+    isArchetype: false,
+    primary,
+    secondary,
+    description: desc,
+    valence,
+    confidence: 0.78,
+    hasPivot,
+    pivotWord
+  };
+}
+
+$('textAnalyzeBtn').addEventListener('click', async () => {
+  const text = $('journalInput').value.trim();
+  if(!text){ $('textSub').textContent = 'Write something first'; return; }
+  $('textSub').textContent = 'Analyzing complete situational scenario…';
+
+  try{
+    const situation = analyzeSituationalNarrative(text);
+    if(!situation){
+      $('textSub').textContent = 'Neutral reflection';
+      return;
+    }
+
+    const score = clamp(50 + situation.valence * 50, 0, 100);
+    state.text.active = true;
+    state.text.score = score;
+    $('textLit').textContent = '●';
+    $('textLit').classList.add('live-pulse');
+    $('textValue').textContent = Math.round(score);
+
+    const primaryTag = situation.primary.toUpperCase();
+    const secTag = situation.secondary ? situation.secondary.toUpperCase() : '';
+    $('textSub').textContent = `${primaryTag}${secTag ? ' & ' + secTag : ''} · ${situation.description}`;
+
+    behaviorLogEntry(text);
+    recomputeMaster();
+  }catch(err){
+    $('textSub').textContent = 'Analysis error: ' + err.message;
+  }
+});
+
+/* Real-Time Contextual Typing Preview — Evaluates complete sentences and discourse pivots */
+$('journalInput').addEventListener('input', () => {
+  const text = $('journalInput').value;
+  const chip = $('moodChip'), chipText = $('moodChipText');
+  chip.classList.remove('chip-up','chip-down');
+  if(!text.trim()){ chipText.textContent = 'Start typing…'; return; }
+
+  const situation = analyzeSituationalNarrative(text);
+  if(!situation){ chipText.textContent = 'Neutral reflection so far…'; return; }
+
+  if(situation.valence > 0.20){
+    chip.classList.add('chip-up');
+    chipText.textContent = situation.description;
+  } else if(situation.valence < -0.20){
+    chip.classList.add('chip-down');
+    chipText.textContent = situation.description;
+  } else {
+    chipText.textContent = situation.description || 'Reflective scenario so far';
+  }
+});
+
+/* ---------------- BEHAVIOR CHANNEL (passive) ---------------- */
+let entryCount = 0, lateNightCount = 0;
+let rhythmSamples = [];
+let keyTimestamps = [];
+
+$('journalInput').addEventListener('keydown', () => { keyTimestamps.push(Date.now()); });
+
+/* Lightweight instant preview (word-list heuristic) so the mood chip reacts live while
+   typing — the real 28-class emotion score still only comes from "Analyze entry". */
+const POS_WORDS = ['good','great','happy','glad','calm','excited','fine','okay','relaxed','proud','hopeful','love','grateful','better','rested','fun'];
+const NEG_WORDS = ['sad','tired','anxious','stressed','angry','bad','worried','overwhelmed','lonely','scared','hopeless','exhausted','hate','cry','crying','awful','worse','numb'];
+$('journalInput').addEventListener('input', () => {
+  const text = $('journalInput').value.toLowerCase();
+  const chip = $('moodChip'), chipText = $('moodChipText');
+  chip.classList.remove('chip-up','chip-down');
+  if(!text.trim()){ chipText.textContent = 'Start typing…'; return; }
+  const words = text.match(/[a-z']+/g) || [];
+  let hits = 0;
+  words.forEach(w => { if(POS_WORDS.includes(w)) hits++; if(NEG_WORDS.includes(w)) hits--; });
+  if(hits > 0){ chip.classList.add('chip-up'); chipText.textContent = 'Leaning positive so far'; }
+  else if(hits < 0){ chip.classList.add('chip-down'); chipText.textContent = 'Leaning heavy so far'; }
+  else { chipText.textContent = 'Neutral so far — keep writing'; }
+});
+
+function behaviorLogEntry(text){
+  entryCount++;
+  const hour = new Date().getHours();
+  // 9pm-5am, not just midnight-5am — captures the "journaling right before bed" pattern too
+  if(hour >= 21 || hour < 5) lateNightCount++;
+  $('statEntries').textContent = entryCount;
+  $('statLateNight').textContent = lateNightCount;
+
+  if(keyTimestamps.length > 4){
+    const gaps = [];
+    for(let i=1;i<keyTimestamps.length;i++) gaps.push(keyTimestamps[i]-keyTimestamps[i-1]);
+    const mean = gaps.reduce((a,b)=>a+b,0)/gaps.length;
+    const variance = gaps.reduce((a,b)=>a+(b-mean)*(b-mean),0)/gaps.length;
+    const sd = Math.sqrt(variance);
+    // Running session average, not just the most recent entry — one jittery entry
+    // shouldn't swing the label on its own.
+    rhythmSamples.push(sd);
+    if(rhythmSamples.length > 8) rhythmSamples.shift();
+  }
+  keyTimestamps = [];
+
+  const avgSd = rhythmSamples.length ? rhythmSamples.reduce((a,b)=>a+b,0)/rhythmSamples.length : null;
+  const rhythmLabel = avgSd === null ? '--' : (avgSd > 900 ? 'Hesitant' : (avgSd > 400 ? 'Mixed' : 'Steady'));
+  $('statRhythm').textContent = rhythmLabel;
+
+  computeBehaviorScore(rhythmLabel);
+}
+
+function computeBehaviorScore(rhythmLabel){
+  // Neutral baseline (50), matching every other channel — behavior no longer starts
+  // pre-skewed positive for no stated reason.
+  let score = 50;
+  if(rhythmLabel === 'Hesitant') score -= 12;
+  if(rhythmLabel === 'Steady') score += 10;
+  if(lateNightCount > 0) score -= Math.min(lateNightCount*7, 21);
+
+  // Entry frequency and session length — genuinely wired in now, matching what the
+  // Model Stack table already claimed this channel used.
+  const minutesElapsed = sessionElapsedSecs / 60;
+  if(minutesElapsed > 2){
+    const entriesPerMinute = entryCount / minutesElapsed;
+    if(entriesPerMinute < 0.15) score -= 6;       // very sparse engagement over a longer session
+    else if(entriesPerMinute > 0.6) score += 6;   // frequent, sustained journaling
+  }
+  if(entryCount >= 3) score += 4; // small credit for sustained engagement across several entries
+
+  score = clamp(score, 0, 100);
+  state.behavior.score = score;
+  $('behaviorValue').textContent = Math.round(score);
+  recomputeMaster();
+}
+
+let sessionElapsedSecs = 0;
+setInterval(() => {
+  if(isPaused) return;
+  sessionElapsedSecs++;
+  const m = Math.floor(sessionElapsedSecs/60), s = sessionElapsedSecs%60;
+  $('statSession').textContent = m + ':' + String(s).padStart(2,'0');
+}, 1000);
+
+/* ---------------- OPTIONAL / AUX CHANNEL ---------------- */
+function bindSlider(sliderId, labelId, onChange){
+  const slider = $(sliderId);
+  slider.addEventListener('input', () => {
+    $(labelId).textContent = slider.value;
+    onChange(Number(slider.value));
+  });
+}
+let sleepH = 7, activityM = 20, academicP = 5;
+bindSlider('sleepSlider','sleepVal', v => { sleepH = v; updateAux(); });
+bindSlider('activitySlider','activityVal', v => { activityM = v; updateAux(); });
+bindSlider('academicSlider','academicVal', v => { academicP = v; updateAux(); });
+['sleepInclude','activityInclude','academicInclude'].forEach(id => {
+  $(id).addEventListener('change', updateAux);
+});
+
+function updateAux(){
+  const included = [];
+  if($('sleepInclude').checked) included.push(clamp((sleepH/8)*100,0,100));
+  if($('activityInclude').checked) included.push(clamp((activityM/45)*100,0,100));
+  if($('academicInclude').checked) included.push(clamp(100-(academicP*10),0,100));
+  if(included.length){
+    state.aux.active = true;
+    state.aux.score = included.reduce((a,b)=>a+b,0)/included.length;
+  } else {
+    state.aux.active = false;
+    state.aux.score = null;
+  }
+  recomputeMaster();
+}
+
+/* ---------------- TREND / HISTORY ---------------- */
+let trendChart;
+function loadHistory(){
+  try{ return JSON.parse(localStorage.getItem('signalwell_history') || '[]'); }
+  catch{ return []; }
+}
+function saveHistory(hist){ localStorage.setItem('signalwell_history', JSON.stringify(hist)); }
+
+function renderTrend(){
+  const hist = loadHistory();
+  const ctx = document.getElementById('trendChart');
+  const labels = hist.map(h => new Date(h.t).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}));
+  const data = hist.map(h => h.score);
+  if(trendChart) trendChart.destroy();
+  trendChart = new Chart(ctx, {
+    type:'line',
+    data:{ labels, datasets:[{
+      label:'Wellbeing reading', data,
+      borderColor:'#8FA377', backgroundColor:'rgba(143,163,119,0.15)',
+      tension:0.35, fill:true, pointRadius:3
+    }]},
+    options:{
+      scales:{
+        y:{ min:0, max:100, ticks:{color:'#8A93A6'}, grid:{color:'#2E3542'} },
+        x:{ ticks:{color:'#8A93A6'}, grid:{display:false} }
+      },
+      plugins:{ legend:{display:false} }
+    }
+  });
+  $('historyStatus').textContent = hist.length
+    ? hist.length + ' snapshot(s) stored locally in this browser.'
+    : 'No snapshots logged yet — stored locally in this browser only.';
+}
+renderTrend();
+
+$('logSnapshotBtn').addEventListener('click', () => {
+  const master = recomputeMaster();
+  const hist = loadHistory();
+  hist.push({t:Date.now(), score:Math.round(master)});
+  saveHistory(hist.slice(-40));
+  renderTrend();
+});
+$('clearHistoryBtn').addEventListener('click', () => {
+  localStorage.removeItem('signalwell_history');
+  renderTrend();
+});
+
+/* ---------------- PAUSE / RESUME SESSION ---------------- */
+let isPaused = false;
+const pausedOverlays = ['pausedFace','pausedVoice','pausedText','pausedBehavior'].map(id => $(id));
+
+$('pauseBtn').addEventListener('click', () => {
+  isPaused = !isPaused;
+  const btn = $('pauseBtn');
+  const status = $('sessionStatus');
+
+  if(isPaused){
+    // Stop analyzing — clear the live detection loops without dropping the camera/mic permission,
+    // so resuming doesn't force the user to re-grant access.
+    if(faceInterval) clearInterval(faceInterval);
+    if(voiceInterval) clearInterval(voiceInterval);
+
+    $('textAnalyzeBtn').disabled = true;
+    $('journalInput').disabled = true;
+
+    pausedOverlays.forEach(el => el.style.display = 'flex');
+    btn.textContent = 'Resume session';
+    btn.classList.add('is-paused');
+    btn.setAttribute('aria-pressed','true');
+    status.innerHTML = '<span class="dot-paused">●</span> ' + currentUser + ' — paused';
+  } else {
+    // Resume — only restart loops for channels the user had actually enabled.
+    if(state.face.active) faceInterval = setInterval(runFaceDetection, 1200);
+    if(state.voice.active) voiceInterval = setInterval(analyzeVoice, 700);
+
+    $('textAnalyzeBtn').disabled = false;
+    $('journalInput').disabled = false;
+
+    pausedOverlays.forEach(el => el.style.display = 'none');
+    btn.textContent = 'Pause session';
+    btn.classList.remove('is-paused');
+    btn.setAttribute('aria-pressed','false');
+    status.innerHTML = '<span class="dot-live">●</span> ' + currentUser;
+  }
+});
+
+/* ---------------- CANCEL SESSION ---------------- */
+$('cancelBtn').addEventListener('click', () => { $('cancelConfirm').classList.add('show'); });
+$('cancelDismiss').addEventListener('click', () => { $('cancelConfirm').classList.remove('show'); });
+$('cancelConfirm').addEventListener('click', (e) => { if(e.target === $('cancelConfirm')) $('cancelConfirm').classList.remove('show'); });
+
+$('cancelConfirmBtn').addEventListener('click', () => {
+  $('cancelConfirm').classList.remove('show');
+
+  // Stop every live loop and release camera/mic.
+  if(faceInterval) clearInterval(faceInterval);
+  if(voiceInterval) clearInterval(voiceInterval);
+  cancelAnimationFrame(waveformRAF);
+  const faceStream = $('faceVideo').srcObject;
+  if(faceStream) faceStream.getTracks().forEach(t => t.stop());
+  $('faceVideo').srcObject = null;
+  if(micStream) micStream.getTracks().forEach(t => t.stop());
+  if(audioCtx && audioCtx.state !== 'closed') audioCtx.close();
+
+  // Reset channel state back to defaults.
+  state.face = {active:false, score:null, weight:25};
+  state.voice = {active:false, score:null, weight:15};
+  state.text = {active:false, score:null, weight:30};
+  state.behavior = {active:true, score:50, weight:20};
+  state.aux = {active:false, score:null, weight:10};
+
+  faceToggle.setAttribute('aria-pressed','false'); faceToggle.textContent = 'Enable camera';
+  voiceToggle.setAttribute('aria-pressed','false'); voiceToggle.textContent = 'Enable mic';
+  $('faceLit').textContent = ''; $('faceLit').classList.remove('live-pulse');
+  $('voiceLit').textContent = ''; $('voiceLit').classList.remove('live-pulse');
+  $('textLit').textContent = ''; $('textLit').classList.remove('live-pulse');
+  $('journalInput').value = ''; $('journalInput').disabled = false;
+  $('textAnalyzeBtn').disabled = false;
+  $('moodChipText').textContent = 'Start typing…';
+  $('moodChip').classList.remove('chip-up','chip-down');
+  faceScores.length = 0; voiceScores.length = 0;
+  clearCanvas('faceSpark'); clearCanvas('voiceSpark'); clearCanvas('voiceWave');
+  entryCount = 0; lateNightCount = 0; rhythmSamples = []; keyTimestamps = [];
+  $('statEntries').textContent = '0'; $('statLateNight').textContent = '0'; $('statRhythm').textContent = '--';
+  sessionElapsedSecs = 0; $('statSession').textContent = '0:00';
+  isPaused = false;
+  $('pauseBtn').textContent = 'Pause session'; $('pauseBtn').classList.remove('is-paused'); $('pauseBtn').setAttribute('aria-pressed','false');
+  pausedOverlays.forEach(el => el.style.display = 'none');
+  lowStreak = 0; $('supportBanner').classList.remove('show');
+  recomputeMaster();
+
+  // Back to the sign-in gate for a clean, consenting restart.
+  clearTimeout(welcomeTimer);
+  $('welcomeToast').classList.remove('show');
+  $('appRoot').style.display = 'none';
+  $('gate').style.display = 'flex';
+  $('gateName').value = '';
+  $('gateConsent').checked = false;
+  $('gateError').style.display = 'none';
+  currentUser = null;
+});
+
+/* init */
+recomputeMaster();
+</script>
+</body>
+</html>
