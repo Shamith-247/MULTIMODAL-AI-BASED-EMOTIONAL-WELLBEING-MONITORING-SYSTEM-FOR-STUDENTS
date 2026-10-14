@@ -97,6 +97,20 @@ This document records the complete, step-by-step engineering journey, root-cause
 | **M5: Unified Tri-Modal Fusion** | Real-time Bayesian late fusion combining Voice + Face + Text uncertainty scores | 🔄 In Progress | Shamith & Siva |
 | **M6: Counselor Alert System** | Longitudinal wellbeing scoring, anomaly detection, threshold-based alerts | ⏳ Planned | Full Team |
 
+## 📌 Phase 5: Comprehensive Technical Audit of Facial Emotion Recognition System
+
+### 5.1 Investigation & Discovery
+* **Scope**: In-depth audit of model architecture (`InceptionResnetV1` + `vggface2`), dataset processing (`MTCNN` on `deanngkl/raf-db-7emotions`), checkpoint characteristics (`face_model_v7_best.pt`), desktop inference (`live_webcam_face_app.py`), and browser frontend (`app/index.html`).
+* **Key Findings**:
+  1. **Extreme Neutral Recall ($99.74\%$)**: Model achieved 768/770 neutral recall on RAF-DB test set. Subtle and resting expressions are swallowed by the dominant neutral class.
+  2. **Preprocessing & Alignment Mismatch**: Training utilized MTCNN 5-point landmark affine alignment on $160\times 160$ crops. Desktop inference used unaligned OpenCV Haar cascades, and web used $48\times 48$ FER-2013 MobileNet.
+  3. **High Dropout Rate**: MTCNN failed to detect faces on 1,687 images ($8.2\%$) of RAF-DB during training data generation.
+  4. **Computational Weight**: InceptionResnetV1 has 27.9M parameters (~112 MB), creating an excessive CPU burden for real-time live webcam processing on student laptops.
+* **Deliverable**: Generated authoritative audit report: [`docs/06_FACIAL_EMOTION_AUDIT_REPORT.md`](./06_FACIAL_EMOTION_AUDIT_REPORT.md).
+* **Next Steps**: Benchmark open-source FER alternatives (MobileNetV4, EfficientNet-B0/B2, ResEmoteNet) and lightweight detectors (YuNet, MediaPipe BlazeFace) with unified ONNX/Wasm export.
+
 ---
 
 *This process log will be maintained continuously across subsequent development phases.*
+
+

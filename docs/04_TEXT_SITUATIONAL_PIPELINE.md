@@ -116,3 +116,4 @@ We verified the engine against 10 complex student scenarios in `SignalWell/test_
    Features one-click scenario presets, custom text input, discourse weight visualizer, and live sentiment radar charts.
 3. **Google Colab Model Fine-Tuning Pipeline (`SignalWell/colab_scripts/83_test_and_fix_situational_scenario_emotions.py`)**:
    Enables PyTorch fine-tuning of RoBERTa/DeBERTa on discourse-annotated student reflection datasets.
+

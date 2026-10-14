@@ -155,3 +155,4 @@ A composite **Student Distress Index (SDI)** is computed continuously:
 $$\text{SDI} = P(\text{Sadness}) \cdot 1.0 + P(\text{Fear/Anxiety}) \cdot 1.2 + P(\text{Anger}) \cdot 0.8 - P(\text{Happiness}) \cdot 0.6$$
 * If $\text{SDI} > 0.65$ persistently for $> 3$ minutes, a yellow warning is flagged.
 * If $\text{SDI} > 0.85$, a high-priority counselor intervention alert is dispatched.
+

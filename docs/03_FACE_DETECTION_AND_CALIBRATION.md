@@ -132,3 +132,4 @@ The project provides three independent pipelines to test and verify facial detec
 ### 3. Google Colab Training & Logit Fix (`colab_scripts/82_fix_face_model_v7_neutral_bias_clahe_and_export.py`)
 * PyTorch training and fine-tuning script ready for Google Colab with free T4 GPU.
 * Implements focal loss with class weight re-balancing and automated ONNX/TensorFlow.js export.
+

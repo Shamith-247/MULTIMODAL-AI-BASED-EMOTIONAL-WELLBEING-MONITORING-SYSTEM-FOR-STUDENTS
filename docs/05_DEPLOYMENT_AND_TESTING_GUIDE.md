@@ -135,3 +135,4 @@ To protect project stability and respect team collaboration:
 * **STRICT RULE**: **Never push directly to `main`**.
 * All experimental and multimodal feature commits must be pushed to `dev` or dedicated feature branches (e.g. `feature/*`).
 * Pull requests will be created and reviewed before merging into `main`.
+

@@ -15,6 +15,7 @@ This folder maintains an authoritative, end-to-end record of all architectural d
 | **[`03_FACE_DETECTION_AND_CALIBRATION.md`](./03_FACE_DETECTION_AND_CALIBRATION.md)** | **Face Emotion Pipeline & Live HUD**<br>Root-cause analysis of webcam failures, coordinate unwarping, multi-tier cascading detector, CLAHE contrast equalization, neutral logit bias offset ($\Delta z_{neutral} = 0.55$), and on-face HUD rendering. |
 | **[`04_TEXT_SITUATIONAL_PIPELINE.md`](./04_TEXT_SITUATIONAL_PIPELINE.md)** | **Context-Aware Situational Discourse Engine**<br>Why single-word keyword models fail, Transformers.js 404 recovery, negation scope tracking, contrastive pivot weighting, third-party attribution filters, and student situational archetypes. |
 | **[`05_DEPLOYMENT_AND_TESTING_GUIDE.md`](./05_DEPLOYMENT_AND_TESTING_GUIDE.md)** | **Testing, Verification & Runbook**<br>Step-by-step instructions for running the live interactive dashboard, standalone webcam and text testers, desktop OpenCV apps, and Colab GPU scripts. |
+| **[`06_FACIAL_EMOTION_AUDIT_REPORT.md`](./06_FACIAL_EMOTION_AUDIT_REPORT.md)** | **Technical Audit & Architectural Review**<br>Comprehensive 10-point audit of InceptionResnetV1, MTCNN dropout, neutral bias saturation, preprocessing divergence, and open-source model alternatives. |
 
 ---
 
@@ -56,3 +57,4 @@ flowchart TD
 ---
 
 > **Note on Maintenance**: This `docs/` repository is continuously updated alongside code commits. All new features, architectural migrations, model retraining runs, and empirical benchmarks are appended to [`01_PROCESS_LOG.md`](./01_PROCESS_LOG.md).
+
