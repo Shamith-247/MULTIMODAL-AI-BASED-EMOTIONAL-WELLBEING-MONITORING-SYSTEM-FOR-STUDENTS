@@ -81,12 +81,22 @@ You can toggle which datasets to include directly via `DATASET_CONFIG` in the sc
 - `SIGNALWELL_VOICE_PIPELINE.py`: Full standalone script that handles dataset downloading, feature extraction, training with early stopping, evaluation metrics, and single-file prediction.
 - `SIGNALWELL_VOICE_KAGGLE.ipynb`: Master notebook configured for Kaggle Free GPU (T4 x 2, 30 hrs/week) with native Kaggle dataset access.
 - `SIGNALWELL_VOICE_COLAB.ipynb`: Self-contained Google Colab notebook with Google Drive caching.
+- `interface.py`: Real-time web server for interactive microphone recording and speech emotion inference.
+- `web_dashboard.html`: Sleek dark-mode clinical dashboard frontend with live waveform visualizer and triage alerts.
+- `PATENT_SPECIFICATION.md`: Formal patent disclosure with 10 formal patent claims covering ECAN-SER.
 - `requirements.txt`: Python packages needed to run the code.
 - `sample_1.wav`, `sample_2.wav`, `sample_3.wav`: Test audio samples to quickly verify inference.
 
 ## Getting Started
 
-### Option 1: Kaggle Free GPU (Recommended — 30 Hours Free / Week)
+### Option 1: Live Interactive Clinical Dashboard (Local Web GUI)
+To launch the real-time student monitoring and speech emotion dashboard:
+```bash
+python interface.py 8050
+```
+Then open your browser at `http://localhost:8050` to record live from your microphone or drag-and-drop `.wav` voice files.
+
+### Option 2: Kaggle Free GPU (Recommended for 55k+ Dataset Training)
 1. Go to [kaggle.com/code](https://www.kaggle.com/code) and click **New Notebook**.
 2. In the right sidebar under **Notebook Options**:
    - **Accelerator**: select **GPU T4 x 2** (or P100).
@@ -94,27 +104,5 @@ You can toggle which datasets to include directly via `DATASET_CONFIG` in the sc
 3. Click **File -> Import Notebook** and select `SIGNALWELL_VOICE_KAGGLE.ipynb`.
 4. Click **Run All**!
 
-### Option 2: Google Colab
+### Option 3: Google Colab
 Upload `SIGNALWELL_VOICE_COLAB.ipynb` to Google Colab, enable GPU runtime (`Runtime -> Change runtime type -> T4 GPU`), and run the cells.
-
-### Option 3: Running Locally
-
-Clone the repository and install dependencies:
-
-```bash
-git clone https://github.com/Shamith-247/MULTIMODAL-AI-BASED-EMOTIONAL-WELLBEING-MONITORING-SYSTEM-FOR-STUDENTS.git
-cd MULTIMODAL-AI-BASED-EMOTIONAL-WELLBEING-MONITORING-SYSTEM-FOR-STUDENTS/voice_model
-pip install -r requirements.txt
-```
-
-To run training:
-```bash
-python SIGNALWELL_VOICE_PIPELINE.py
-```
-
-To run prediction on a single audio file:
-```python
-from SIGNALWELL_VOICE_PIPELINE import predict_single_file
-
-label, confidence = predict_single_file("sample_1.wav")
-```

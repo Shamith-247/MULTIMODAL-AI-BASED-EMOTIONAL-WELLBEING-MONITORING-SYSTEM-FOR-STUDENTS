@@ -127,3 +127,57 @@ where $\tilde{\alpha}_k = y_k + (1 - y_k) \alpha_k$, $\psi(\cdot)$ is the digamm
 
 ### 5. INDUSTRIAL & CLINICAL APPLICATION
 The disclosed invention is directly integrated into student wellbeing monitoring dashboards, educational stress-detection platforms, and tele-mental health triage, providing verifiable trust scores alongside real-time emotion classifications.
+
+---
+
+### 6. FORMAL PATENT CLAIMS
+
+#### WE CLAIM:
+
+1. **An automated speech signal processing apparatus for affective computing and clinical triage**, comprising:
+   - an acoustic input interface configured to capture digital speech audio samples at a predetermined sampling frequency;
+   - a multi-scale feature decomposition processor configured to:
+     - extract a sequence of deep self-supervised contextual speech representations across a plurality of temporal chunks utilizing a multi-layer speech foundation model; and
+     - extract a synchronized time-varying sequence of acoustic-prosodic descriptor vectors across said temporal chunks;
+   - a bidirectional cross-modal co-attention engine coupled to said feature decomposition processor, configured to compute an acoustic-to-semantic attention map and a semantic-to-acoustic attention map, and fuse said attention maps via a channel-wise squeeze-and-excitation gating circuit to produce a cross-modally grounded acoustic sequence;
+   - a multi-scale conformer temporal backbone comprising a plurality of stacked conformer blocks, each block comprising a depthwise dilated temporal convolution module configured with a receptive dilation factor to model phonemic micro-tremors, a relative multi-head self-attention module to model utterance intonation contours, and dual pre-norm feed-forward half-step networks;
+   - an attentive temporal pooling processor configured to generate a compact affective embedding via content-dependent multi-head importance weighting across said temporal chunks;
+   - an evidential Dirichlet inference head configured to project said affective embedding through a strictly non-negative continuous Softplus activation function to generate a class evidence vector $\mathbf{e} \in \mathbb{R}^K$, parameterizing a Dirichlet probability distribution having concentration vector $\boldsymbol{\alpha} = \mathbf{e} + \mathbf{1}$, and outputting an expected emotion class probability vector $\hat{\mathbf{p}} = \boldsymbol{\alpha} / S$ and a decoupled epistemic uncertainty metric $u = K / S$, where $S = \sum_{k=1}^K \alpha_k$; and
+   - an automated clinical triage actuator configured to evaluate said epistemic uncertainty metric $u$ against an empirical threshold $\tau$, wherein when $u < \tau$, an automated affective assessment is verified, and when $u \ge \tau$, automated assessment is suppressed and an alert is dispatched to an electronic clinical counselor workstation.
+
+2. **The apparatus of claim 1**, wherein said multi-scale feature decomposition processor extracts said deep self-supervised speech representations by taking an ensemble blend of intermediate paralinguistic layers and a top semantic layer of a WavLM foundation model.
+
+3. **The apparatus of claim 1**, wherein said synchronized acoustic-prosodic descriptor vectors comprise fundamental pitch ($F_0$) statistics derived via a fast YIN algorithm, root-mean-square vocal energy dynamics, zero-crossing rates, spectral centroid, spectral bandwidth, spectral rolloff, pause ratio, and mel-frequency cepstral coefficients (MFCCs) evaluated independently for each temporal chunk.
+
+4. **The apparatus of claim 1**, wherein said squeeze-and-excitation gating circuit computes a channel modulation vector $\mathbf{G} = \sigma(\mathbf{W}_2 \cdot \text{GELU}(\mathbf{W}_1 \cdot \text{GAP}([\mathbf{A}_{w \to p}; \mathbf{A}_{p \to w}])))$, wherein $\mathbf{GAP}$ denotes global average pooling across the temporal dimension.
+
+5. **The apparatus of claim 1**, wherein said depthwise dilated temporal convolution module comprises a kernel size of 3 and a temporal dilation factor of 2, providing a localized receptive field spanning 50 ms to 300 ms.
+
+6. **The apparatus of claim 1**, wherein said evidential Dirichlet inference head is trained using a composite balanced evidential focal loss function comprising:
+   - a Dirichlet Bayes risk expected log loss term;
+   - a smoothed class-frequency weighted focal cross-entropy regularization term; and
+   - an annealed Kullback-Leibler (KL) divergence regularizer penalizing misleading evidence with respect to a uniform Dirichlet prior distribution.
+
+7. **A computer-implemented method for robust speech emotion recognition and calibrated uncertainty estimation**, the method comprising:
+   - receiving, by a digital signal processor, a digital speech audio signal;
+   - segmenting said audio signal into a plurality of uniform chronological temporal chunks;
+   - extracting a contextual speech representation sequence and a synchronized acoustic-prosodic sequence across said temporal chunks;
+   - applying bidirectional cross-modal co-attention between said contextual representations and said acoustic-prosodic sequence;
+   - fusing the co-attended representations utilizing a squeeze-and-excitation channel gating mechanism to generate a fused temporal feature sequence;
+   - propagating said fused temporal feature sequence through a conformer temporal backbone combining dilated depthwise temporal convolutions and multi-head self-attention;
+   - aggregating temporal features across said chunks via content-dependent multi-head attention pooling;
+   - transforming the pooled representation via a Softplus activation function to obtain non-negative emotion evidence parameters parameterizing a Dirichlet prior distribution;
+   - computing an expected emotion classification distribution and an epistemic uncertainty metric; and
+   - conditionally triggering an automated clinical counselor triage alert when said epistemic uncertainty metric exceeds a predefined threshold.
+
+8. **The method of claim 7**, wherein said digital speech audio signal is further transcribed using an automated speech recognition (ASR) engine, and the resulting linguistic token representations are co-attended with said acoustic-prosodic sequence.
+
+9. **The method of claim 7**, wherein training said conformer temporal backbone includes applying temporal chunk masking by randomly zeroing a selected chunk representation during backward optimization.
+
+10. **A non-transitory computer-readable storage medium** storing instructions that, when executed by one or more processors, cause the one or more processors to perform operations comprising:
+    - capturing raw speech audio from an input transducer;
+    - decomposing said speech audio into dual-stream contextual phonetic representations and dynamic prosodic descriptors;
+    - performing bidirectional cross-modal co-attention with squeeze-and-excitation residual gating;
+    - modeling micro-tremor and macro-intonation dynamics through a dilated depthwise conformer;
+    - generating Dirichlet evidence parameters via Softplus activation to decouple epistemic uncertainty from classification confidence; and
+    - rendering, on an interactive graphical user interface, a predicted emotion badge, an epistemic uncertainty score, and an automated clinical triage state.
