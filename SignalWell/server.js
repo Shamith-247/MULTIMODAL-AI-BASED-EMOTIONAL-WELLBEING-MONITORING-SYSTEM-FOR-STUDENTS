@@ -50,13 +50,24 @@ const server = http.createServer((req, res) => {
   let reqPath = decodeURI(req.url.split('?')[0]);
   if (reqPath === '/' || reqPath === '') reqPath = '/index.html';
 
-  let filePath = path.join(BASE_DIR, reqPath);
-  
-  // Security check: prevent directory traversal outside BASE_DIR
-  if (!filePath.startsWith(BASE_DIR)) {
-    res.writeHead(403);
-    res.end('Access denied');
-    return;
+  const ROOT_DIR = path.resolve(__dirname, '..');
+  let filePath;
+
+  if (reqPath.startsWith('/text_model/') || reqPath.startsWith('/face_model/') || 
+      reqPath.startsWith('/models/') || reqPath.startsWith('/voice_model/')) {
+    filePath = path.join(ROOT_DIR, reqPath);
+    if (!filePath.startsWith(ROOT_DIR)) {
+      res.writeHead(403);
+      res.end('Access denied');
+      return;
+    }
+  } else {
+    filePath = path.join(BASE_DIR, reqPath);
+    if (!filePath.startsWith(BASE_DIR)) {
+      res.writeHead(403);
+      res.end('Access denied');
+      return;
+    }
   }
 
   fs.stat(filePath, (err, stats) => {
@@ -84,11 +95,13 @@ server.listen(PORT, () => {
   console.log('\n' + '='.repeat(68));
   console.log(' SignalWell Local Web Server Running');
   console.log('='.repeat(68));
-  console.log(`\n  1. Situational Scenario Emotion Tester (Text):`);
+  console.log(`\n  1. Unified Multimodal Model Tester (Face + Text + Fusion):`);
+  console.log(`     --> http://localhost:${PORT}/test_multimodal_models.html`);
+  console.log(`\n  2. Situational Scenario Emotion Tester (Text):`);
   console.log(`     --> http://localhost:${PORT}/test_text_scenarios.html`);
-  console.log(`\n  2. Dedicated Webcam & Face Output Tester:`);
+  console.log(`\n  3. Dedicated Webcam & Face Output Tester:`);
   console.log(`     --> http://localhost:${PORT}/test_webcam_face.html`);
-  console.log(`\n  3. Full SignalWell Multimodal Console:`);
+  console.log(`\n  4. Full SignalWell Multimodal Console:`);
   console.log(`     --> http://localhost:${PORT}/index.html`);
   console.log(`\n  Press Ctrl + C to stop the server.\n`);
   console.log('='.repeat(68) + '\n');

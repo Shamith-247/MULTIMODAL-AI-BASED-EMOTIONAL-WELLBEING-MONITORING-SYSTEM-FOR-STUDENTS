@@ -13,10 +13,11 @@ __pycache__/
 # Data & feature caches
 /datasets/
 /features/
-/models/
 SIGNALWELL_VOICE/
 !SignalWell/app/models/
 !SignalWell/app/models/**
+!models/
+!models/**
 
 # Environments & IDEs
 .env

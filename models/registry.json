@@ -1,0 +1,68 @@
+{
+  "project": "SignalWell",
+  "registry_version": "1.0.0",
+  "updated_at": "2026-10-15",
+  "models": {
+    "face": {
+      "modality": "visual",
+      "architecture": "MobileNetV4-FER-SE",
+      "version": "8.0.0",
+      "status": "calibrated",
+      "input_shape": [1, 3, 224, 224],
+      "color_order": "RGB",
+      "classes": ["angry", "disgust", "fear", "happy", "neutral", "sad", "surprise"],
+      "calibration": {
+        "temperature": 0.85,
+        "neutral_penalty": 0.55,
+        "disgust_boost": 0.25
+      },
+      "storage_paths": {
+        "pytorch": "face_model/best_face_model_v8_large_dataset.pt",
+        "onnx": "face_model/face_model_v8_calibrated.onnx",
+        "tfjs_manifest": "SignalWell/app/models/face_expression_model-weights_manifest.json"
+      }
+    },
+    "text": {
+      "modality": "linguistic",
+      "architecture": "RoBERTa-GoEmotions-Discourse",
+      "version": "8.0.0",
+      "status": "calibrated",
+      "max_seq_length": 512,
+      "discourse_parsing": {
+        "clause_weight_premise": 0.25,
+        "clause_weight_resolution": 0.75,
+        "negation_inversion": true
+      },
+      "storage_paths": {
+        "engine_js": "text_model/situational_discourse_engine.js",
+        "pipeline_py": "text_model/text_pipeline.py",
+        "hf_checkpoint": "SamLowe/roberta-base-go_emotions"
+      }
+    },
+    "voice": {
+      "modality": "acoustic",
+      "architecture": "ECAN-SER (WavLM-Conformer)",
+      "version": "6.0.0",
+      "status": "production",
+      "sampling_rate": 16000,
+      "chunk_duration_sec": 6.0,
+      "classes": ["angry", "disgust", "fear", "happy", "neutral", "sad", "surprise"],
+      "storage_paths": {
+        "pipeline_py": "voice_model/SIGNALWELL_VOICE_PIPELINE.py",
+        "interface_py": "voice_model/interface.py",
+        "dashboard_html": "voice_model/web_dashboard.html"
+      }
+    },
+    "multimodal_fusion": {
+      "modality": "fusion",
+      "architecture": "Bayesian Late Fusion",
+      "weights": {
+        "face": 0.35,
+        "text": 0.35,
+        "voice": 0.20,
+        "behavior": 0.10
+      },
+      "metrics_produced": ["valence", "arousal", "stress_index", "fatigue_index", "stability_score"]
+    }
+  }
+}

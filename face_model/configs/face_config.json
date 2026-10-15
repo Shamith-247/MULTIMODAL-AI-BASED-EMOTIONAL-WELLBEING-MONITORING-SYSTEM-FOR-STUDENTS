@@ -1,0 +1,37 @@
+{
+  "module": "SignalWell-Face-FER",
+  "version": "8.0.0",
+  "classes": ["angry", "disgust", "fear", "happy", "neutral", "sad", "surprise"],
+  "detector": {
+    "type": "yunet",
+    "conf_threshold": 0.60,
+    "nms_threshold": 0.30,
+    "top_k": 5000,
+    "input_size": [320, 320]
+  },
+  "alignment": {
+    "enabled": true,
+    "target_eye_dist": 0.28,
+    "target_eye_y": 0.38,
+    "output_size": [224, 224]
+  },
+  "preprocessing": {
+    "clahe_enabled": true,
+    "clahe_clip_limit": 2.0,
+    "clahe_grid_size": [8, 8],
+    "mean": [0.485, 0.456, 0.406],
+    "std": [0.229, 0.224, 0.225]
+  },
+  "calibration": {
+    "temperature": 0.85,
+    "neutral_penalty": 0.55,
+    "disgust_boost": 0.25,
+    "top_k_display": 3
+  },
+  "webcam": {
+    "preferred_indices": [0, 1, 2],
+    "target_fps": 30,
+    "frame_width": 640,
+    "frame_height": 480
+  }
+}

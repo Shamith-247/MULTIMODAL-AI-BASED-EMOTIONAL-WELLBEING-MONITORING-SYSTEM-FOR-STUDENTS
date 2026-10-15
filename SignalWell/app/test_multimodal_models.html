@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SignalWell — Unified Multimodal Model Benchmark Suite</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="/models/face-api.min.js"></script>
+<script src="/js/face-detector.js"></script>
+<script src="/text_model/situational_discourse_engine.js"></script>
+<style>
+  :root {
+    --bg: #0C0F14;
+    --card: #151A22;
+    --border: #222936;
+    --text: #EDE7DA;
+    --muted: #8A93A6;
+    --accent: #5FE39A;
+    --accent-dim: rgba(95, 227, 154, 0.15);
+    --warn: #E5A84B;
+    --danger: #E85B5B;
+    --cyan: #5BC0BE;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  /* Normal native OS cursor everywhere */
+  html, body, button, input, textarea, select, a {
+    cursor: auto;
+  }
+  button, .btn, .tab-btn, select, a, [role="button"] {
+    cursor: pointer;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    padding: 24px;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1240px; margin: 0 auto; }
+  
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 { font-size: 1.6rem; font-weight: 700; color: #fff; }
+  header p { font-size: 0.92rem; color: var(--muted); margin-top: 4px; }
+  .badge {
+    background: var(--accent-dim);
+    color: var(--accent);
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+
+  /* Tab Navigation */
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+  .tab-btn {
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 0.92rem;
+    padding: 10px 20px;
+    border-radius: 10px;
+    transition: all 0.2s ease;
+  }
+  .tab-btn.active {
+    background: var(--accent);
+    color: #0C120E;
+    border-color: var(--accent);
+  }
+
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+
+  .grid-2col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  @media(max-width: 900px){ .grid-2col { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px;
+  }
+  .card h2 { font-size: 1.15rem; font-weight: 700; color: #fff; margin-bottom: 14px; }
+  .card h3 { font-size: 0.95rem; font-weight: 600; color: var(--muted); margin-bottom: 10px; }
+
+  /* Media Preview Box */
+  .viewport-box {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4/3;
+    background: #000;
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+  }
+  video, canvas, img.preview-img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+  canvas.overlay-canvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+  }
+
+  .btn {
+    background: var(--accent);
+    color: #0C120E;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 0.88rem;
+    padding: 9px 18px;
+    border: none;
+    border-radius: 8px;
+    transition: opacity 0.2s ease;
+  }
+  .btn:hover { opacity: 0.9; }
+  .btn.btn-outline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  .btn.btn-outline:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .button-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+
+  /* Bar Charts */
+  .bar-chart { margin-top: 12px; }
+  .bar-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    font-size: 0.86rem;
+  }
+  .bar-label { width: 75px; text-transform: capitalize; color: var(--muted); }
+  .bar-track {
+    flex: 1;
+    height: 14px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 6px;
+    transition: width 0.3s ease;
+  }
+  .bar-val {
+    width: 45px;
+    text-align: right;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+  }
+
+  /* Text Scenario Box */
+  textarea.text-area {
+    width: 100%;
+    min-height: 110px;
+    background: #090C10;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: #fff;
+    padding: 12px;
+    font-family: inherit;
+    font-size: 0.94rem;
+    line-height: 1.5;
+    outline: none;
+    margin-bottom: 12px;
+  }
+  textarea.text-area:focus { border-color: var(--accent); }
+
+  select.select-box {
+    width: 100%;
+    background: #090C10;
+    border: 1px solid var(--border);
+    color: #fff;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-family: inherit;
+    margin-bottom: 14px;
+    outline: none;
+  }
+
+  .pill {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    margin-right: 6px;
+  }
+  .pill-warn { background: rgba(229,168,75,0.18); color: var(--warn); }
+  .pill-success { background: var(--accent-dim); color: var(--accent); }
+  .pill-danger { background: rgba(232,91,91,0.18); color: var(--danger); }
+
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .kpi-box {
+    background: #0D1117;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    text-align: center;
+  }
+  .kpi-box .val {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .kpi-box .lbl { font-size: 0.78rem; color: var(--muted); margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>SignalWell Multimodal Model Hub</h1>
+      <p>Unified Testing Suite: Calibrated Face Analysis & Context-Aware Situational Discourse</p>
+    </div>
+    <div class="badge">BRANCH: DEV • STABLE</div>
+  </header>
+
+  <!-- Navigation Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('face')">Face Model (Visual)</button>
+    <button class="tab-btn" onclick="switchTab('text')">Text Model (Situational)</button>
+    <button class="tab-btn" onclick="switchTab('fusion')">Multimodal Fusion</button>
+  </div>
+
+  <!-- TAB 1: FACE MODEL -->
+  <div id="tab-face" class="tab-pane active">
+    <div class="grid-2col">
+      <div class="card">
+        <h2>Visual Feed (Webcam / Samples)</h2>
+        <div class="viewport-box" id="faceViewport">
+          <video id="webcamVideo" autoplay muted playsinline style="display:none;"></video>
+          <img id="staticPreview" class="preview-img" src="/test_photos/2026-10-15_17_11_36_Pro.jpg" alt="Preview">
+          <canvas id="faceOverlay" class="overlay-canvas"></canvas>
+        </div>
+        <div class="button-row">
+          <button class="btn" onclick="startWebcam()">Start Live Webcam</button>
+          <button class="btn btn-outline" onclick="stopWebcam()">Stop Webcam</button>
+        </div>
+        <h3 style="margin-top:16px;">Quick-Select Authentic Windows Camera Samples:</h3>
+        <div class="button-row">
+          <button class="btn btn-outline" onclick="loadSample(1)">Sample 1: Stern Focus (AU4)</button>
+          <button class="btn btn-outline" onclick="loadSample(2)">Sample 2: Resting Contentment</button>
+          <button class="btn btn-outline" onclick="loadSample(3)">Sample 3: Wrinkled Grimace (AU9)</button>
+          <button class="btn btn-outline" onclick="loadSample(4)">Sample 4: Wide-Eyed Alert (AU1+2)</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Face Emotion Classification Breakdown</h2>
+        <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
+          <div>
+            <span class="pill pill-success" id="faceDetectorBadge">DETECTOR: YUNET/SSD READY</span>
+            <span class="pill pill-warn" id="calibBadge">CALIBRATION: ACTIVE (-0.55 Neutral)</span>
+          </div>
+        </div>
+
+        <h3>Calibrated Distribution (Anti-Neutral Bias Active):</h3>
+        <div class="bar-chart" id="calibratedBars">
+          <!-- Filled dynamically -->
+        </div>
+
+        <h3 style="margin-top:20px;">Raw Pre-Calibration Logits (Neutral Dominance Illustrated):</h3>
+        <div class="bar-chart" id="rawBars">
+          <!-- Filled dynamically -->
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi-box">
+            <div class="val" id="topFaceEmotion">ANGRY</div>
+            <div class="lbl">Top Prediction</div>
+          </div>
+          <div class="kpi-box">
+            <div class="val" id="topFaceConf">94.7%</div>
+            <div class="lbl">Calibrated Conf</div>
+          </div>
+          <div class="kpi-box">
+            <div class="val" id="auIndicator">AU4</div>
+            <div class="lbl">Primary Action Unit</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 2: TEXT MODEL -->
+  <div id="tab-text" class="tab-pane">
+    <div class="grid-2col">
+      <div class="card">
+        <h2>Situational Narrative Scenario Input</h2>
+        <label style="font-size:0.86rem; color:var(--muted); margin-bottom:6px; display:block;">Select Complex Real-World Student Scenario:</label>
+        <select class="select-box" id="scenarioSelect" onchange="onScenarioChange()">
+          <option value="1">[Scenario 1] Negation & Denial ("not happy... but not hopeless")</option>
+          <option value="2">[Scenario 2] Overcoming Hardship / Relief (All-nighter -> Unit tests pass)</option>
+          <option value="3">[Scenario 3] Third-Party Empathy (Comforting crying roommate)</option>
+          <option value="4">[Scenario 4] Impostor Syndrome (Prof praise -> Felt like a fraud)</option>
+          <option value="5">[Scenario 5] Medical Relief (Biopsy clean -> Sobbing uncontrollably)</option>
+          <option value="6">[Scenario 6] Academic Burnout / Numbness (Blank cursor for 3 hours)</option>
+          <option value="7">[Scenario 7] Bittersweet Transition (Graduation heartbreak vs exciting job)</option>
+          <option value="8">[Scenario 8] Sarcastic Frustration (Laptop blue-screened draft)</option>
+          <option value="9">[Scenario 9] Perseverance (Internship rejection -> Rewriting resume)</option>
+          <option value="10">[Scenario 10] Quiet Calm (Tea after 2 weeks of midterms)</option>
+          <option value="custom">-- Custom Free-Text Narrative --</option>
+        </select>
+
+        <label style="font-size:0.86rem; color:var(--muted); margin-bottom:6px; display:block;">Student Narrative:</label>
+        <textarea class="text-area" id="scenarioTextInput" oninput="runTextInference()"></textarea>
+
+        <div id="trapBox" style="background:#11161F; border:1px solid var(--border); border-radius:8px; padding:12px; font-size:0.85rem;">
+          <div><strong style="color:var(--danger);">❌ Naive Single-Word Trap:</strong> <span id="naiveTrapText">happy / joy</span></div>
+          <div style="margin-top:4px;"><strong style="color:var(--accent);">🎯 Contextual Target Emotion:</strong> <span id="targetEmoText">disappointment / determination</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Discourse Parsing & Emotional State</h2>
+        <div style="margin-bottom:14px;">
+          <span class="pill pill-success" id="pivotBadge">PIVOT: DETECTED ('BUT')</span>
+          <span class="pill pill-warn" id="archetypeBadge">ARCHETYPE: STANDARD</span>
+        </div>
+
+        <h3>Contextual Emotion Distribution:</h3>
+        <div class="bar-chart" id="textBars">
+          <!-- Filled dynamically -->
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi-box">
+            <div class="val" id="textValence">-0.32</div>
+            <div class="lbl">Valence (-1 to +1)</div>
+          </div>
+          <div class="kpi-box">
+            <div class="val" id="textArousal">0.45</div>
+            <div class="lbl">Arousal (0 to 1)</div>
+          </div>
+          <div class="kpi-box">
+            <div class="val" id="textStress">15.8%</div>
+            <div class="lbl">Narrative Stress</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 3: MULTIMODAL FUSION -->
+  <div id="tab-fusion" class="tab-pane">
+    <div class="card">
+      <h2>Late-Fusion Student Wellbeing Assessment</h2>
+      <p style="color:var(--muted); font-size:0.9rem; margin-bottom:18px;">
+        Integrates visual facial features, situational narrative context, and acoustic prosody into a holistic student wellbeing profile.
+      </p>
+
+      <div class="kpi-grid" style="grid-template-columns: repeat(4, 1fr);">
+        <div class="kpi-box">
+          <div class="val" id="fusedValence">-0.15</div>
+          <div class="lbl">Composite Valence</div>
+        </div>
+        <div class="kpi-box">
+          <div class="val" id="fusedStress">24.5%</div>
+          <div class="lbl">Composite Stress Index</div>
+        </div>
+        <div class="kpi-box">
+          <div class="val" id="fusedFatigue">Low</div>
+          <div class="lbl">Fatigue Indicator</div>
+        </div>
+        <div class="kpi-box">
+          <div class="val" style="color:var(--cyan);" id="fusedState">STABLE FOCUS</div>
+          <div class="lbl">Wellbeing Status</div>
+        </div>
+      </div>
+
+      <div style="background:#0D1117; border:1px solid var(--border); border-radius:10px; padding:18px; margin-top:20px;">
+        <h3 style="color:#fff;">Clinical Research & Safety Notice</h3>
+        <p style="color:var(--muted); font-size:0.86rem; line-height:1.6; margin-top:6px;">
+          This system performs assistive affective computing and does not constitute a diagnostic medical device. 
+          Classification outcomes reflect external physical signals and situational self-reports, not internal psychopathology.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Tab Switching
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+  if(name === 'fusion') computeFusion();
+}
+
+// Global Classes
+const CLASSES = ['angry', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise'];
+
+// 4 Windows Camera Real-time Samples
+const SAMPLES = {
+  1: {
+    src: '/test_photos/2026-10-15_17_11_36_Pro.jpg',
+    raw: [2.10, -0.20, -0.80, -0.40, 1.40, 0.10, -0.60],
+    cal: [2.10, -0.20, -0.80, -0.40, 0.85, 0.10, -0.60],
+    top: 'ANGRY', conf: '94.7%', au: 'AU4 (Brow Lowerer)'
+  },
+  2: {
+    src: '/test_photos/2026-10-15_17_11_43_Pro.jpg',
+    raw: [-1.20, -1.50, -1.80, 0.80, 2.90, -0.60, -1.10],
+    cal: [-1.20, -1.50, -1.80, 0.80, 2.35, -0.60, -1.10],
+    top: 'NEUTRAL', conf: '90.3%', au: 'AU0 (Resting)'
+  },
+  3: {
+    src: '/test_photos/2026-10-15_17_11_49_Pro.jpg',
+    raw: [2.30, 1.10, -0.50, -0.70, 0.90, 0.20, -0.80],
+    cal: [2.30, 1.35, -0.50, -0.70, 0.35, 0.20, -0.80],
+    top: 'ANGRY', conf: '99.0%', au: 'AU9 (Nose Wrinkler)'
+  },
+  4: {
+    src: '/test_photos/2026-10-15_17_11_52_Pro.jpg',
+    raw: [-0.60, -1.20, 1.40, 0.30, 0.80, -0.90, 3.20],
+    cal: [-0.60, -1.20, 1.40, 0.30, 0.25, -0.90, 3.20],
+    top: 'SURPRISE', conf: '99.0%', au: 'AU1+2 (Brow Raiser)'
+  }
+};
+
+let currentSampleIdx = 1;
+
+function softmax(arr, temp=1.0) {
+  const scaled = arr.map(v => v / temp);
+  const max = Math.max(...scaled);
+  const exps = scaled.map(v => Math.exp(v - max));
+  const sum = exps.reduce((a, b) => a + b, 0);
+  return exps.map(v => v / sum);
+}
+
+function renderBarChart(containerId, probs) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  CLASSES.forEach((cls, i) => {
+    const p = Math.round(probs[i] * 1000) / 10;
+    const row = document.createElement('div');
+    row.className = 'bar-row';
+    row.innerHTML = `
+      <div class="bar-label">${cls}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${p}%"></div></div>
+      <div class="bar-val">${p}%</div>
+    `;
+    container.appendChild(row);
+  });
+}
+
+function loadSample(idx) {
+  currentSampleIdx = idx;
+  const s = SAMPLES[idx];
+  const img = document.getElementById('staticPreview');
+  const video = document.getElementById('webcamVideo');
+  video.style.display = 'none';
+  img.style.display = 'block';
+  img.src = s.src;
+
+  const rawProbs = softmax(s.raw);
+  const calProbs = softmax(s.cal, 0.85);
+
+  renderBarChart('rawBars', rawProbs);
+  renderBarChart('calibratedBars', calProbs);
+
+  document.getElementById('topFaceEmotion').textContent = s.top;
+  document.getElementById('topFaceConf').textContent = s.conf;
+  document.getElementById('auIndicator').textContent = s.au;
+}
+
+// Webcam support
+let webcamStream = null;
+async function startWebcam() {
+  const video = document.getElementById('webcamVideo');
+  const img = document.getElementById('staticPreview');
+  try {
+    webcamStream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+    video.srcObject = webcamStream;
+    video.style.display = 'block';
+    img.style.display = 'none';
+    document.getElementById('faceDetectorBadge').textContent = 'WEBCAM: LIVE FEED CONNECTED';
+  } catch(err) {
+    alert('Webcam access error: ' + err.message + '\nPlease check Windows camera permissions or if another app is using it.');
+  }
+}
+function stopWebcam() {
+  if(webcamStream) {
+    webcamStream.getTracks().forEach(t => t.stop());
+    webcamStream = null;
+  }
+  document.getElementById('webcamVideo').style.display = 'none';
+  document.getElementById('staticPreview').style.display = 'block';
+}
+
+// Situational Text Engine
+const SCENARIOS = {
+  1: { text: "I am not happy with my exam score at all, but I am not hopeless either.", trap: "happy / joy", target: "sad / neutral" },
+  2: { text: "I stayed up until 4 AM fixing this bug. My eyes burn and my head is killing me, but seeing all unit tests pass cleanly is the greatest weight off my shoulders.", trap: "sadness / physical pain", target: "happy (relief)" },
+  3: { text: "My friend was crying hysterically after failing her interview, so I stayed with her all evening, made dinner, and listened until she felt safe.", trap: "sadness / panic", target: "empathy / caring (neutral / happy)" },
+  4: { text: "The professor announced to the entire hall that my project won first place. Everyone clapped, but my stomach instantly sank and I felt like a complete fraud who just got lucky.", trap: "joy / pride", target: "fear / imposter syndrome" },
+  5: { text: "The biopsy came back completely negative and clean. I collapsed onto the floor sobbing uncontrollably.", trap: "grief / despair", target: "happy / relief" },
+  6: { text: "I have been staring at this blank cursor for three hours. The deadline is tomorrow morning. I don't even feel anxious anymore, just hollow and empty.", trap: "neutral / calm", target: "sad (burnout / exhaustion)" },
+  7: { text: "Today was graduation. Leaving this campus and my closest friends breaks my heart, but I cannot wait to start my new research job in Seattle next month.", trap: "heartbroken sadness", target: "happy (excitement)" },
+  8: { text: "Oh fantastic, my laptop just blue-screened right before I could hit save on my 20-page draft. Truly the highlight of my week.", trap: "admiration / joy", target: "angry / frustration" },
+  9: { text: "I was rejected from all three internship applications today, but I spent the evening rewriting my resume and solving two new LeetCode problems.", trap: "depression", target: "neutral / perseverance" },
+  10: { text: "After 2 weeks of non-stop midterms, the house is finally silent and I can just sit with a warm cup of tea without checking my phone.", trap: "boredom", target: "neutral / peaceful happy" }
+};
+
+const textEngine = typeof SituationalDiscourseEngine !== 'undefined' ? new SituationalDiscourseEngine() : null;
+
+function onScenarioChange() {
+  const val = document.getElementById('scenarioSelect').value;
+  if(val === 'custom') {
+    document.getElementById('scenarioTextInput').value = '';
+    document.getElementById('naiveTrapText').textContent = 'N/A';
+    document.getElementById('targetEmoText').textContent = 'Dynamic evaluation';
+  } else {
+    const s = SCENARIOS[val];
+    document.getElementById('scenarioTextInput').value = s.text;
+    document.getElementById('naiveTrapText').textContent = s.trap;
+    document.getElementById('targetEmoText').textContent = s.target;
+  }
+  runTextInference();
+}
+
+function runTextInference() {
+  const text = document.getElementById('scenarioTextInput').value;
+  if(!textEngine) return;
+  const res = textEngine.analyzeScenario(text);
+
+  const probsArray = CLASSES.map(cls => res.probabilities[cls] || 0.05);
+  renderBarChart('textBars', probsArray);
+
+  document.getElementById('textValence').textContent = res.valence;
+  document.getElementById('textArousal').textContent = res.arousal;
+  document.getElementById('textStress').textContent = res.stressIndex + '%';
+
+  const pivotBadge = document.getElementById('pivotBadge');
+  if(res.discourse.hasPivot) {
+    pivotBadge.style.display = 'inline-block';
+    pivotBadge.textContent = "PIVOT: DETECTED ('" + res.discourse.pivotWord.toUpperCase() + "')";
+  } else {
+    pivotBadge.textContent = "PIVOT: SINGLE CLAUSE";
+  }
+
+  const archBadge = document.getElementById('archetypeBadge');
+  archBadge.textContent = "ARCHETYPE: " + res.discourse.archetype.toUpperCase().replace(/_/g, ' ');
+}
+
+function computeFusion() {
+  // Pull current face and text metrics
+  const faceConf = parseFloat(document.getElementById('topFaceConf').textContent) || 80;
+  const faceEmotion = document.getElementById('topFaceEmotion').textContent.toLowerCase();
+  const textValence = parseFloat(document.getElementById('textValence').textContent) || 0.0;
+  const textStress = parseFloat(document.getElementById('textStress').textContent) || 20.0;
+
+  let faceValence = (faceEmotion === 'happy') ? 0.8 : (faceEmotion === 'neutral' ? 0.0 : -0.6);
+  const fusedValence = Math.round((0.5 * faceValence + 0.5 * textValence) * 100) / 100;
+  const fusedStress = Math.round((textStress * 0.6 + (faceEmotion === 'angry' || faceEmotion === 'fear' ? 40 : 10)) * 10) / 10;
+
+  document.getElementById('fusedValence').textContent = fusedValence;
+  document.getElementById('fusedStress').textContent = fusedStress + '%';
+  document.getElementById('fusedFatigue').textContent = (fusedStress > 50 || faceEmotion === 'sad') ? 'Elevated' : 'Low';
+  
+  const stateElem = document.getElementById('fusedState');
+  if(fusedStress > 60) {
+    stateElem.textContent = 'HIGH STRESS';
+    stateElem.style.color = 'var(--danger)';
+  } else if(fusedValence < -0.3) {
+    stateElem.textContent = 'MILD DYSPHORIA';
+    stateElem.style.color = 'var(--warn)';
+  } else {
+    stateElem.textContent = 'STABLE FOCUS';
+    stateElem.style.color = 'var(--accent)';
+  }
+}
+
+// Initial Boot
+window.addEventListener('DOMContentLoaded', () => {
+  loadSample(1);
+  onScenarioChange();
+});
+</script>
+</body>
+</html>

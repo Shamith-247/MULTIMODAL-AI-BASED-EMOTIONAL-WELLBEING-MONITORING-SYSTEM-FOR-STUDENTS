@@ -82,3 +82,4 @@
 81: 81_personal_test_set_evaluate_v7_on_your_own_15_label.py
 82_fix_face_model_v7_neutral_bias_clahe_and_export.py
 83_test_and_fix_situational_scenario_emotions.py
+84_train_face_model_v8_large_dataset_affectnet_rafdb.py

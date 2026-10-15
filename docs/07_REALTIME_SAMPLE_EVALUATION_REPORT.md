@@ -82,3 +82,4 @@ We evaluated the complete facial emotion recognition pipeline against **4 authen
 1. **Detection Stability Verified**: The cascading face detector successfully acquired the user's face across all 4 photos ($100\%$ detection rate) despite severe window sidelighting and facial hair.
 2. **Neutral Bias Suppression Validated**: On expressive photos (Sample 1 and Sample 4), logit calibration successfully prevented the neutral class from diluting the primary emotion.
 3. **Target for Improvement**: Disgust and mild sadness require targeted training loss re-weighting (focal loss $\gamma = 2.0$) or geometric landmark Action Unit extraction to disambiguate from Anger.
+

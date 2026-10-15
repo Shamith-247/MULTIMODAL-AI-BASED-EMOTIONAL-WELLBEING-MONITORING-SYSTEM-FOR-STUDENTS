@@ -1,0 +1,40 @@
+{
+  "module": "SignalWell-Text-Situational",
+  "version": "8.0.0",
+  "supported_taxonomies": ["ekman_7", "goemotions_28"],
+  "pivots": [
+    "but", "however", "yet", "nevertheless", "nonetheless",
+    "although", "even though", "though", "finally", "at last", "on the other hand"
+  ],
+  "clause_weights": {
+    "premise": 0.25,
+    "resolution": 0.75
+  },
+  "archetypes": {
+    "sarcasm": {
+      "triggers": ["oh fantastic", "oh wonderful", "just great", "truly the highlight", "what a joy"],
+      "catastrophes": ["blue-screened", "crashed", "failed", "deleted", "lost", "broke down", "destroyed"],
+      "boost": {"annoyance": 0.45, "anger": 0.35},
+      "suppress": ["joy", "admiration", "excitement"]
+    },
+    "relief": {
+      "triggers": ["weight off my shoulders", "weight off our shoulders", "negative and clean", "turned out benign", "passed cleanly", "finally over"],
+      "boost": {"relief": 0.55, "gratitude": 0.30},
+      "suppress": ["sadness", "grief", "fear"]
+    },
+    "impostor": {
+      "triggers": ["felt like a fraud", "felt like an imposter", "complete fraud", "just got lucky", "stomach instantly sank"],
+      "boost": {"nervousness": 0.45, "fear": 0.35},
+      "suppress": ["pride", "joy"]
+    },
+    "empathy_caring": {
+      "triggers": ["stayed with her", "stayed with him", "stayed with them", "listened until", "held her hand", "made dinner for", "comforted"],
+      "boost": {"caring": 0.50, "love": 0.30},
+      "suppress": ["sadness"]
+    }
+  },
+  "crisis_safety": {
+    "keywords": ["suicide", "kill myself", "end it all", "self-harm", "cut myself", "want to die"],
+    "action": "trigger_crisis_hotline_modal"
+  }
+}
