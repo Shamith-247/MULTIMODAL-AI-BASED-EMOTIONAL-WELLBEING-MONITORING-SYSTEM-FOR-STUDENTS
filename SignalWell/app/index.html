@@ -213,9 +213,10 @@
 
   /* ===== Sign-in gate ===== */
   .gate{
-    position:fixed; inset:0; z-index:200; background:var(--ink);
-    display:flex; align-items:center; justify-content:center; padding:24px;
+    position:fixed; inset:0; z-index:200; background:rgba(16,19,26,0.85); backdrop-filter:blur(6px);
+    display:none; align-items:center; justify-content:center; padding:24px;
   }
+  .gate.show{display:flex;}
   .gate-card{
     max-width:420px; width:100%; background:var(--fog); border:1px solid var(--hair);
     border-radius:14px; padding:32px; box-shadow:var(--shadow);
@@ -230,7 +231,30 @@
   .gate-consent{display:flex; gap:10px; align-items:flex-start; font-size:.82rem; color:var(--mist); margin-bottom:20px;}
   .gate-consent input{margin-top:3px;}
   .gate-error{color:var(--rust); font-size:.82rem; margin:-10px 0 14px; display:none;}
-  #appRoot{display:none;}
+  #appRoot{display:block;}
+
+  /* ===== Nav Dropdown for Labs ===== */
+  .nav-dropdown { position: relative; display: inline-flex; align-items: center; }
+  .nav-dropdown-btn {
+    background: none; border: none; color: var(--mist); font-size: .84rem;
+    font-family: inherit; cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 0;
+  }
+  .nav-dropdown-btn:hover { color: var(--bone); }
+  .nav-dropdown-menu {
+    display: none; position: absolute; top: calc(100% + 8px); right: 0;
+    background: var(--fog); border: 1px solid var(--hair); border-radius: 10px;
+    padding: 8px 0; min-width: 230px; box-shadow: 0 14px 40px rgba(0,0,0,0.65); z-index: 100;
+  }
+  .nav-dropdown:hover .nav-dropdown-menu, .nav-dropdown:focus-within .nav-dropdown-menu {
+    display: block;
+  }
+  .nav-dropdown-menu a {
+    display: block; padding: 8px 16px; color: var(--bone); text-decoration: none;
+    font-size: .82rem; transition: background .15s;
+  }
+  .nav-dropdown-menu a:hover {
+    background: rgba(143, 163, 119, 0.15); color: var(--moss);
+  }
 
   /* ===== Session control (pause) ===== */
   .session-ctl{display:flex; align-items:center; gap:14px;}
@@ -919,18 +943,28 @@
   <div class="wrap">
     <div class="brand"><span class="dot"></span> SIGNALWELL</div>
     <nav>
-      <a href="#face-studio" style="color:var(--moss); font-weight:600;">Face AI Studio</a>
-      <a href="#mixer">Console</a>
-      <a href="#aux">Context</a>
+      <a href="#face-studio" style="color:var(--moss); font-weight:600;">Live Face AI Studio</a>
+      <a href="#mixer">Multimodal Console</a>
+      <a href="javascript:void(0)" onclick="endSessionAndGenerateSummary()" style="color:var(--ember); font-weight:500;">Session Summary</a>
       <a href="#trend">Trend</a>
-      <a href="#support">Support</a>
       <a href="#stack">Model Stack</a>
+      <div class="nav-dropdown">
+        <button class="nav-dropdown-btn">
+          Labs &amp; Testers ▾
+        </button>
+        <div class="nav-dropdown-menu">
+          <a href="test_webcam_face.html" target="_blank">📷 Dedicated Webcam Tester</a>
+          <a href="test_sample_photos.html" target="_blank">📸 Sample Photo Benchmark</a>
+          <a href="test_text_scenarios.html" target="_blank">📝 Situational Text Tester</a>
+          <a href="test_multimodal_models.html" target="_blank">🎛 Multimodal Model Suite</a>
+        </div>
+      </div>
     </nav>
     <div class="session-ctl">
-      <span class="session-status" id="sessionStatus"><span class="dot-live">●</span> <span id="signedInAs"></span></span>
+      <span class="session-status" id="sessionStatus" style="cursor:pointer;" title="Click to edit profile name"><span class="dot-live">●</span> <span id="signedInAs">Shamith</span> <span style="font-size:0.65rem; color:var(--moss);">[Edit]</span></span>
       <button class="pause-btn" id="pauseBtn" aria-pressed="false">Pause session</button>
       <button class="btn btn-primary" id="endSessionBtn" style="padding:4px 12px; font-size:0.78rem; background:var(--moss); border-color:var(--moss); color:var(--night); font-weight:600;">End session</button>
-      <button class="cancel-btn" id="cancelBtn">Cancel session</button>
+      <button class="cancel-btn" id="cancelBtn">Reset session</button>
     </div>
   </div>
 </header>
@@ -942,9 +976,10 @@
       <h1>Four quiet signals.<br><em>One honest reading.</em></h1>
       <p class="lede">SignalWell listens to what a student's face, voice, words, and habits are already saying — and fuses them into a single wellbeing reading, computed entirely on-device with open-source models. Nothing here is a diagnosis. It's an early, gentle signal to check in.</p>
       <div class="cta-row">
-        <button class="btn btn-primary" onclick="document.getElementById('face-studio').scrollIntoView({behavior:'smooth'})">Launch Live Face AI Studio</button>
-        <button class="btn btn-ghost" onclick="document.getElementById('mixer').scrollIntoView({behavior:'smooth'})">Open console</button>
-        <a class="btn btn-ghost" href="#stack">See model stack</a>
+        <button class="btn btn-primary" onclick="$('studioCamToggle').click(); document.getElementById('face-studio').scrollIntoView({behavior:'smooth'});">▶ Start Live Camera Feed</button>
+        <button class="btn btn-ghost" onclick="document.querySelector('.sample-pill-btn').click(); document.getElementById('face-studio').scrollIntoView({behavior:'smooth'});">📸 Test Authentic Photo</button>
+        <button class="btn btn-ghost" onclick="endSessionAndGenerateSummary()">📊 View Session Report</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('mixer').scrollIntoView({behavior:'smooth'})">🎛 Open Console</button>
       </div>
     </div>
     <div class="signal-scope">
@@ -1120,6 +1155,7 @@
         <div class="strip-ctl" style="margin-top:14px; display:flex; gap:6px;">
           <button class="mini-btn" id="faceToggle" aria-pressed="false" style="flex:1;">Enable camera</button>
           <button class="mini-btn" id="faceCalibrateBtn" style="flex:1; display:none;" title="Calibrate current resting face as neutral baseline">Calibrate</button>
+          <button class="mini-btn" onclick="document.getElementById('face-studio').scrollIntoView({behavior:'smooth'})" style="background:transparent; border:1px solid var(--hair); color:var(--moss); font-size:0.75rem;" title="Switch to full-screen Live Face AI Studio">Studio ↗</button>
         </div>
         <div class="face-ctrl-row" style="display:flex; justify-content:space-between; align-items:center; font-size:.72rem; color:var(--mist-dim); margin-top:5px; padding:0 2px;">
           <span title="Dampens neutral logit bias to reveal subtle expressions">Neutral damp:</span>
@@ -1328,8 +1364,21 @@ const $ = (id) => document.getElementById(id);
 // Custom cursor disabled to preserve standard native OS mouse pointer
 document.documentElement.classList.remove('custom-cursor');
 
-/* ---------------- SIGN-IN GATE ---------------- */
-let currentUser = null;
+/* ---------------- PROFILE & SESSION MANAGEMENT ---------------- */
+let currentUser = 'Shamith';
+if($('signedInAs')) $('signedInAs').textContent = currentUser;
+
+const sessionStatusEl = $('sessionStatus');
+if(sessionStatusEl){
+  sessionStatusEl.addEventListener('click', () => {
+    const newName = prompt('Enter session user name (for report analytics):', currentUser || 'Shamith');
+    if(newName && newName.trim()){
+      currentUser = newName.trim();
+      if($('signedInAs')) $('signedInAs').textContent = currentUser;
+    }
+  });
+}
+
 $('gateSubmit').addEventListener('click', () => {
   const name = $('gateName').value.trim();
   if(!name || !$('gateConsent').checked){

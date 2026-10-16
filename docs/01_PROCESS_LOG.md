@@ -213,6 +213,16 @@ This document records the complete, step-by-step engineering journey, root-cause
   - Tests 1–10 validated programmatically (local asset serving, key normalization, de-duplication, insufficient data guard, session aggregation, secondary affect ranking, distribution conservation, diagnostic payload schema, clinical safety notice, JSON report serialization).
   - **Result: 10 / 10 Tests Passed (100%)**.
 
+### 8/9.9 Primary Website Layout Integration & Instant Operational Access
+* **Instant Unblocked Access**: Configured `#appRoot` to render immediately upon page load by default, removing the blocking gate barrier so users land straight onto the operational Live Face AI Studio and Multimodal Console.
+* **Unified Header Navigation & Labs Dropdown**: Added an interactive "Labs & Testers ▾" dropdown in the console header providing immediate 1-click access to all standalone diagnostic pages (`test_webcam_face.html`, `test_sample_photos.html`, `test_text_scenarios.html`, and `test_multimodal_models.html`).
+* **Direct Hero Actions**: Enhanced the hero call-to-action bar with 4 instant triggers:
+  - `[▶ Start Live Camera Feed]`: Directly initializes camera and scrolls to Face Studio.
+  - `[📸 Test Authentic Photo]`: Automatically evaluates authentic test photos with HUD overlay.
+  - `[📊 View Session Report]`: Directly opens `#sessionSummaryModal`.
+  - `[🎛 Open Console]`: Jumps to the 4-channel multimodal fusion mixer.
+* **Console Synchronization**: Embedded a "Studio ↗" button in `Ch.1 — Face` enabling seamless bidirectional switching between the compact mixer and the wide-angle Face AI Studio.
+
 ---
 
 *This process log is maintained continuously across all project milestones.*
