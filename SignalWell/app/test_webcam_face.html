@@ -68,8 +68,8 @@
     inset: 0;
     width: 100%;
     height: 100%;
+    object-fit: contain;
     pointer-events: none;
-    transform: scaleX(-1); /* Match video mirror */
   }
 
   .controls-row {
@@ -448,12 +448,22 @@ async function detectLoop(){
     const tStart = performance.now();
 
     try {
-      // Single-pass integrated detection + 68 landmarks + 7 expression probabilities
-      const inputSize = consecutiveMissCount > 4 ? 320 : 224;
-      const full = await faceapi
-        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize, scoreThreshold: 0.12 }))
+      // Primary: High-accuracy TinyFaceDetector with 320px inputSize and sensitive threshold (0.10)
+      // Multi-scale adaptation: if face was missed, boost to 416px for distant/small faces
+      const inputSize = consecutiveMissCount > 1 ? 416 : 320;
+      let full = await faceapi
+        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize, scoreThreshold: 0.10 }))
         .withFaceLandmarks(true)
         .withFaceExpressions();
+
+      // Dual-Engine Fallback: If TinyFace missed 2+ frames and SSD MobileNetV1 is loaded,
+      // invoke SSD MobileNetV1 for ultra-robust face capture
+      if((!full || !full.detection) && consecutiveMissCount >= 2 && faceapi.nets.ssdMobilenetv1 && faceapi.nets.ssdMobilenetv1.isLoaded){
+        full = await faceapi
+          .detectSingleFace(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.20, maxResults: 1 }))
+          .withFaceLandmarks(true)
+          .withFaceExpressions();
+      }
 
       inferenceDurationMs = Math.round(performance.now() - tStart);
       lastInferenceStamp = performance.now();
@@ -461,7 +471,7 @@ async function detectLoop(){
 
       ctx.clearRect(0, 0, cw, ch);
 
-      if(!full || !full.detection || full.detection.box.width < 35 || full.detection.box.height < 35){
+      if(!full || !full.detection || full.detection.box.width < 25 || full.detection.box.height < 25){
         consecutiveMissCount++;
         if(consecutiveMissCount > 3){
           document.getElementById('faceDetected').textContent = 'Searching…';
@@ -569,22 +579,28 @@ async function detectLoop(){
         document.getElementById('p-angry').textContent = Math.round(angry*100) + '%';
         document.getElementById('b-angry').style.width = (angry*100) + '%';
 
+        // Mirrored coordinate calculation to align with mirrored selfie video
+        const bx = cw - (box.x + box.width);
+        const by = box.y;
+        const bw = box.width;
+        const bh = box.height;
+
         // 1. Draw Corner Tracking Brackets
-        const corner = Math.min(28, box.width * 0.22);
+        const corner = Math.min(28, bw * 0.22);
         ctx.lineWidth = 4;
         ctx.strokeStyle = '#5FE39A';
         ctx.lineCap = 'round';
         
         ctx.beginPath();
-        ctx.moveTo(box.x, box.y + corner); ctx.lineTo(box.x, box.y); ctx.lineTo(box.x + corner, box.y);
-        ctx.moveTo(box.x + box.width - corner, box.y); ctx.lineTo(box.x + box.width, box.y); ctx.lineTo(box.x + box.width, box.y + corner);
-        ctx.moveTo(box.x, box.y + box.height - corner); ctx.lineTo(box.x, box.y + box.height); ctx.lineTo(box.x + corner, box.y + box.height);
-        ctx.moveTo(box.x + box.width - corner, box.y + box.height); ctx.lineTo(box.x + box.width, box.y + box.height); ctx.lineTo(box.x + box.width, box.y + box.height - corner);
+        ctx.moveTo(bx, by + corner); ctx.lineTo(bx, by); ctx.lineTo(bx + corner, by);
+        ctx.moveTo(bx + bw - corner, by); ctx.lineTo(bx + bw, by); ctx.lineTo(bx + bw, by + corner);
+        ctx.moveTo(bx, by + bh - corner); ctx.lineTo(bx, by + bh); ctx.lineTo(bx + corner, by + bh);
+        ctx.moveTo(bx + bw - corner, by + bh); ctx.lineTo(bx + bw, by + bh); ctx.lineTo(bx + bw, by + bh - corner);
         ctx.stroke();
 
         // Face box fill
         ctx.fillStyle = 'rgba(95, 227, 154, 0.08)';
-        ctx.fillRect(box.x, box.y, box.width, box.height);
+        ctx.fillRect(bx, by, bw, bh);
 
         // 2. Facial Landmark Points
         if(landmarks && landmarks.positions){
@@ -593,18 +609,20 @@ async function detectLoop(){
           for(const idx of pts){
             const pt = landmarks.positions[idx];
             if(pt){
+              const lx = cw - pt.x;
+              const ly = pt.y;
               ctx.beginPath();
-              ctx.arc(pt.x, pt.y, 3.2, 0, Math.PI * 2);
+              ctx.arc(lx, ly, 3.2, 0, Math.PI * 2);
               ctx.fill();
             }
           }
         }
 
-        // 3. Floating Output Badge
-        const badgeW = Math.max(220, box.width * 0.95);
+        // 3. Floating Output Badge (un-mirrored text, positioned directly above face)
+        const badgeW = Math.max(220, bw * 0.95);
         const badgeH = 46;
-        const badgeX = Math.max(10, Math.min(cw - badgeW - 10, box.x + (box.width - badgeW) / 2));
-        const badgeY = Math.max(10, box.y - badgeH - 10);
+        const badgeX = Math.max(10, Math.min(cw - badgeW - 10, bx + (bw - badgeW) / 2));
+        const badgeY = Math.max(10, by - badgeH - 10);
 
         ctx.fillStyle = 'rgba(12, 15, 20, 0.92)';
         ctx.strokeStyle = '#5FE39A';
@@ -623,10 +641,10 @@ async function detectLoop(){
         ctx.fillText(`CONF: ${confPct}% • ${inferenceDurationMs}ms`, badgeX + 12, badgeY + 36);
 
         // 4. Mini Probability Pill under Chin
-        const subPillW = Math.max(180, box.width * 0.85);
+        const subPillW = Math.max(180, bw * 0.85);
         const subPillH = 22;
-        const subPillX = Math.max(10, Math.min(cw - subPillW - 10, box.x + (box.width - subPillW) / 2));
-        const subPillY = Math.min(ch - subPillH - 8, box.y + box.height + 8);
+        const subPillX = Math.max(10, Math.min(cw - subPillW - 10, bx + (bw - subPillW) / 2));
+        const subPillY = Math.min(ch - subPillH - 8, by + bh + 8);
         ctx.fillStyle = 'rgba(12, 15, 20, 0.88)';
         ctx.strokeStyle = 'rgba(95, 227, 154, 0.4)';
         ctx.lineWidth = 1;

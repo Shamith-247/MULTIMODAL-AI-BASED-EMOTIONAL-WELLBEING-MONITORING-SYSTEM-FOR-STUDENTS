@@ -293,8 +293,8 @@
 
   /* ===== Face overlay ===== */
   .face-wrap{position:relative; width:100%; border-radius:10px; overflow:hidden; background:#0c0f14; border:1px solid var(--hair);}
-  .face-wrap video{width:100%; height:auto; display:block; border-radius:10px;}
-  .face-wrap canvas{position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;}
+  .face-wrap video{width:100%; height:auto; display:block; border-radius:10px; transform:scaleX(-1); object-fit:contain;}
+  .face-wrap canvas{position:absolute; top:0; left:0; width:100%; height:100%; object-fit:contain; pointer-events:none;}
   .expr-bars{display:flex; gap:4px; align-items:flex-end; height:34px;}
   .expr-bars .bar{flex:1; background:var(--hair); border-radius:2px 2px 0 0; position:relative; display:flex; align-items:flex-end;}
   .expr-bars .bar i{display:block; width:100%; background:var(--moss); border-radius:2px 2px 0 0; transition:height .4s ease;}
@@ -417,7 +417,7 @@
   .studio-stage {
     position: relative;
     width: 100%;
-    aspect-ratio: 4/3;
+    aspect-ratio: 16/9;
     max-height: 480px;
     background: #0A0D14;
     border-radius: 10px;
@@ -430,7 +430,7 @@
   .studio-stage video {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
     display: block;
     transform: scaleX(-1);
   }
@@ -439,6 +439,7 @@
     inset: 0;
     width: 100%;
     height: 100%;
+    object-fit: contain;
     pointer-events: none;
     z-index: 2;
   }
@@ -1601,11 +1602,12 @@ function stopCameraStream(){
 
   const fVideo = $('faceVideo');
   if(fVideo && fVideo.srcObject){
-    fVideo.srcObject.getTracks().forEach(t => t.stop());
+    try{ fVideo.srcObject.getTracks().forEach(t => t.stop()); }catch(e){}
     fVideo.srcObject = null;
   }
   const sVideo = $('studioVideo');
   if(sVideo && sVideo.srcObject){
+    try{ sVideo.srcObject.getTracks().forEach(t => t.stop()); }catch(e){}
     sVideo.srcObject = null;
   }
 
@@ -1845,7 +1847,11 @@ async function startCameraFlow(deviceId = null){
 
   const video = $('faceVideo');
   if(video){
-    video.srcObject = stream;
+    try {
+      video.srcObject = (typeof stream.clone === 'function') ? stream.clone() : stream;
+    } catch(e) {
+      video.srcObject = stream;
+    }
     try{ await video.play(); }catch(e){}
   }
   const studioVideo = $('studioVideo');
@@ -1876,7 +1882,7 @@ async function startCameraFlow(deviceId = null){
 
   populateCameraList();
 
-  // Step 2: Load models with ultra-fast local loading + CDN fallback
+  // Step 2: Load models with ultra-fast local loading + CDN fallback (including SSD MobileNetV1)
   try{
     $('faceSub').textContent = 'Loading neural models…';
 
@@ -1890,6 +1896,7 @@ async function startCameraFlow(deviceId = null){
 
     await Promise.all([
       loadWithFallback(faceapi.nets.tinyFaceDetector),
+      loadWithFallback(faceapi.nets.ssdMobilenetv1),
       loadWithFallback(faceapi.nets.faceLandmark68Net),
       loadWithFallback(faceapi.nets.faceExpressionNet)
     ]);
@@ -1937,34 +1944,46 @@ function faceRenderLoop(){
     faceRenderFpsLastTime = now;
   }
 
-  const video = $('faceVideo');
+  // Active Video Selector: Check whichever video element is currently active and decoding frames!
+  const sVid = $('studioVideo');
+  const fVid = $('faceVideo');
+  const video = (sVid && sVid.readyState >= 2 && sVid.videoWidth > 0 && !sVid.paused) ? sVid :
+                (fVid && fVid.readyState >= 2 && fVid.videoWidth > 0 && !fVid.paused) ? fVid :
+                (sVid && sVid.srcObject) ? sVid : fVid;
+
   if(!video || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return;
 
-  // Decoupled throttle: run neural inference at ~12-14 FPS without blocking 60 FPS video rendering
-  if(!isFaceDetecting && (now - lastFaceInferenceTime >= 72)){
+  // Decoupled throttle: run neural inference at ~14-16 FPS without blocking 60 FPS video rendering
+  if(!isFaceDetecting && (now - lastFaceInferenceTime >= 65)){
     isFaceDetecting = true;
     runSinglePassFaceInference(video);
   }
 }
 
 // Reusable on-screen HUD drawing routine for live camera and static sample photos
-function drawHudBox(ctx, box, landmarks, cw, ch, emotionEmoji, emotionName, emotionPct, score, latencyMs, fps){
+function drawHudBox(ctx, box, landmarks, cw, ch, emotionEmoji, emotionName, emotionPct, score, latencyMs, fps, mirrored = false){
+  // Coordinate mirroring: if mirrored (selfie webcam), flip horizontal coordinates
+  const bx = mirrored ? (cw - (box.x + box.width)) : box.x;
+  const by = box.y;
+  const bw = box.width;
+  const bh = box.height;
+
   // 1. Corner Reticles
-  const corner = Math.min(26, box.width * 0.22);
+  const corner = Math.min(26, bw * 0.22);
   ctx.lineWidth = 3.5;
   ctx.strokeStyle = '#5FE39A';
   ctx.lineCap = 'round';
   
   ctx.beginPath();
-  ctx.moveTo(box.x, box.y + corner); ctx.lineTo(box.x, box.y); ctx.lineTo(box.x + corner, box.y);
-  ctx.moveTo(box.x + box.width - corner, box.y); ctx.lineTo(box.x + box.width, box.y); ctx.lineTo(box.x + box.width, box.y + corner);
-  ctx.moveTo(box.x, box.y + box.height - corner); ctx.lineTo(box.x, box.y + box.height); ctx.lineTo(box.x + corner, box.y + box.height);
-  ctx.moveTo(box.x + box.width - corner, box.y + box.height); ctx.lineTo(box.x + box.width, box.y + box.height); ctx.lineTo(box.x + box.width, box.y + box.height - corner);
+  ctx.moveTo(bx, by + corner); ctx.lineTo(bx, by); ctx.lineTo(bx + corner, by);
+  ctx.moveTo(bx + bw - corner, by); ctx.lineTo(bx + bw, by); ctx.lineTo(bx + bw, by + corner);
+  ctx.moveTo(bx, by + bh - corner); ctx.lineTo(bx, by + bh); ctx.lineTo(bx + corner, by + bh);
+  ctx.moveTo(bx + bw - corner, by + bh); ctx.lineTo(bx + bw, by + bh); ctx.lineTo(bx + bw, by + bh - corner);
   ctx.stroke();
 
   // Subtle face box fill
   ctx.fillStyle = 'rgba(95, 227, 154, 0.08)';
-  ctx.fillRect(box.x, box.y, box.width, box.height);
+  ctx.fillRect(bx, by, bw, bh);
 
   // 2. Facial Landmark Points
   if(landmarks && landmarks.length){
@@ -1973,18 +1992,20 @@ function drawHudBox(ctx, box, landmarks, cw, ch, emotionEmoji, emotionName, emot
     for(const idx of pts){
       const pt = landmarks[idx];
       if(pt){
+        const lx = mirrored ? (cw - pt.x) : pt.x;
+        const ly = pt.y;
         ctx.beginPath();
-        ctx.arc(pt.x, pt.y, 2.8, 0, Math.PI * 2);
+        ctx.arc(lx, ly, 2.8, 0, Math.PI * 2);
         ctx.fill();
       }
     }
   }
 
-  // 3. Floating Output Badge
-  const badgeW = Math.max(210, box.width * 0.95);
+  // 3. Floating Output Badge (unmirrored text, placed above the tracked face box)
+  const badgeW = Math.max(210, bw * 0.95);
   const badgeH = 44;
-  const badgeX = Math.max(8, Math.min(cw - badgeW - 8, box.x + (box.width - badgeW) / 2));
-  const badgeY = Math.max(8, box.y - badgeH - 8);
+  const badgeX = Math.max(8, Math.min(cw - badgeW - 8, bx + (bw - badgeW) / 2));
+  const badgeY = Math.max(8, by - badgeH - 8);
 
   ctx.fillStyle = 'rgba(16, 20, 28, 0.92)';
   ctx.strokeStyle = '#5FE39A';
@@ -2221,12 +2242,22 @@ async function runSinglePassFaceInference(video){
 
   let result = null;
   try {
-    // Single-pass integrated detection + 68 landmarks + 7 expression probabilities
-    const inputSize = faceConsecutiveMisses > 4 ? 320 : 224;
+    // Primary: High-accuracy TinyFaceDetector with 320px inputSize and sensitive threshold (0.10)
+    // Multi-scale adaptation: if face was missed, boost to 416px for distant/small faces
+    const inputSize = faceConsecutiveMisses > 1 ? 416 : 320;
     result = await faceapi
-      .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize, scoreThreshold: 0.12 }))
+      .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize, scoreThreshold: 0.10 }))
       .withFaceLandmarks(true)
       .withFaceExpressions();
+
+    // Dual-Engine Fallback: If TinyFace missed 2+ frames and SSD MobileNetV1 is loaded,
+    // invoke SSD MobileNetV1 for ultra-robust face capture across distance, low lighting, and head turns
+    if((!result || !result.detection) && faceConsecutiveMisses >= 2 && faceapi.nets.ssdMobilenetv1 && faceapi.nets.ssdMobilenetv1.isLoaded){
+      result = await faceapi
+        .detectSingleFace(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.20, maxResults: 1 }))
+        .withFaceLandmarks(true)
+        .withFaceExpressions();
+    }
   } catch(err) {
     console.warn('Face inference error:', err);
   }
@@ -2235,7 +2266,7 @@ async function runSinglePassFaceInference(video){
   lastFaceInferenceTime = performance.now();
   isFaceDetecting = false;
 
-  if(!result || !result.detection || result.detection.box.width < 35 || result.detection.box.height < 35){
+  if(!result || !result.detection || result.detection.box.width < 25 || result.detection.box.height < 25){
     faceConsecutiveMisses++;
     if(faceConsecutiveMisses > 3){
       const drawScanning = (ctx, w, h) => {
@@ -2332,16 +2363,16 @@ async function runSinglePassFaceInference(video){
   const score = clamp(50 + valence * 50, 0, 100);
   state.face.score = score;
 
-  // Render Visual HUD on Ch.1 Face Canvas
+  // Render Visual HUD on Ch.1 Face Canvas (mirrored = true for selfie view)
   if(overlayCtx && overlayCanvas){
     overlayCtx.clearRect(0, 0, cw, ch);
-    drawHudBox(overlayCtx, box, landmarks ? landmarks.positions : [], cw, ch, emotionEmoji, emotionName, emotionPct, score, faceInferenceLatencyMs, faceEffectiveFps);
+    drawHudBox(overlayCtx, box, landmarks ? landmarks.positions : [], cw, ch, emotionEmoji, emotionName, emotionPct, score, faceInferenceLatencyMs, faceEffectiveFps, true);
   }
 
-  // Render Visual HUD on Large Studio Canvas
+  // Render Visual HUD on Large Studio Canvas (mirrored = true for selfie view)
   if(studioCtx && studioCanvas){
     studioCtx.clearRect(0, 0, studioCanvas.width, studioCanvas.height);
-    drawHudBox(studioCtx, box, landmarks ? landmarks.positions : [], studioCanvas.width, studioCanvas.height, emotionEmoji, emotionName, emotionPct, score, faceInferenceLatencyMs, faceEffectiveFps);
+    drawHudBox(studioCtx, box, landmarks ? landmarks.positions : [], studioCanvas.width, studioCanvas.height, emotionEmoji, emotionName, emotionPct, score, faceInferenceLatencyMs, faceEffectiveFps, true);
   }
 
   // Update Studio Telemetry
@@ -2933,9 +2964,12 @@ $('cancelConfirmBtn').addEventListener('click', () => {
   faceEmaProbs = null;
   if(voiceInterval) clearInterval(voiceInterval);
   cancelAnimationFrame(waveformRAF);
-  const faceStream = $('faceVideo').srcObject;
+  const faceStream = $('faceVideo')?.srcObject;
   if(faceStream) faceStream.getTracks().forEach(t => t.stop());
-  $('faceVideo').srcObject = null;
+  if($('faceVideo')) $('faceVideo').srcObject = null;
+  const studioStream = $('studioVideo')?.srcObject;
+  if(studioStream) studioStream.getTracks().forEach(t => t.stop());
+  if($('studioVideo')) $('studioVideo').srcObject = null;
   if(micStream) micStream.getTracks().forEach(t => t.stop());
   if(audioCtx && audioCtx.state !== 'closed') audioCtx.close();
 

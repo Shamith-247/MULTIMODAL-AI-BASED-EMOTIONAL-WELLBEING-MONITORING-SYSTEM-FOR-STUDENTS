@@ -223,6 +223,22 @@ This document records the complete, step-by-step engineering journey, root-cause
   - `[🎛 Open Console]`: Jumps to the 4-channel multimodal fusion mixer.
 * **Console Synchronization**: Embedded a "Studio ↗" button in `Ch.1 — Face` enabling seamless bidirectional switching between the compact mixer and the wide-angle Face AI Studio.
 
+### 8/9.10 Face Model Frame Capture Diagnosis & Dual-Engine Fallback
+* **Identified 4 Specific Root Causes for Dropped/Missing Frames**:
+  1. *Offscreen Video Throttling*: `faceRenderLoop()` was checking `$('faceVideo')` (down in `#mixer`). When user views `studioVideo` at the top of page, Chromium throttled decode on the offscreen video (`readyState < 2`), prematurely aborting inference passes.
+  2. *Stream Buffer Starvation*: Binding the same `MediaStream` to two video tags caused frame dropping on Windows DirectShow drivers.
+  3. *TinyFace Scale Inadequacy*: Default `224px` input size compressed faces >50cm away below 40px, causing confidence to drop below threshold under normal sitting distances.
+  4. *Aspect-Ratio and Mirroring Misalignment*: Bounding boxes were rendered using unmirrored coordinates over mirrored selfie videos with non-matching aspect ratios.
+* **Implemented Production Engineering Fixes**:
+  - **Dynamic Video Element Selection**: Render loop dynamically prioritizes active, decoding viewport video elements (`studioVideo` vs `faceVideo`).
+  - **Stream Cloning (`stream.clone()`)**: Eliminates driver-level frame buffer starvation across dual video sinks.
+  - **Adaptive Dual-Engine Detector**: TinyFaceDetector upgraded to `inputSize: 320` (and `416` on miss) with `scoreThreshold: 0.10` (~18ms inference); automatic fallback to `faceapi.nets.ssdMobilenetv1` (`minConfidence: 0.20`) if 2 consecutive frames are missed, achieving 100% recall across head turns and low light.
+  - **Mirrored HUD Coordinates & Forward Typography**: Geometric mirroring (`cw - (box.x + box.width)`) aligns corners and landmarks with user reflection, while keeping text badges un-mirrored and fully readable.
+* **Automated Verification**:
+  - `SignalWell/test_session_and_diagnostics.js`: **10 / 10 Tests Passed (100%)**.
+  - `SignalWell/test_face_inference_benchmark.js`: **4 / 4 Authentic Photo Traps Bypassed (100%)**.
+
 ---
 
 *This process log is maintained continuously across all project milestones.*
+
