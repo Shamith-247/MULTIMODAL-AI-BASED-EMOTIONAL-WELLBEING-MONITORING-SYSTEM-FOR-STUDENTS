@@ -53,8 +53,20 @@ const server = http.createServer((req, res) => {
   const ROOT_DIR = path.resolve(__dirname, '..');
   let filePath;
 
-  if (reqPath.startsWith('/text_model/') || reqPath.startsWith('/face_model/') || 
-      reqPath.startsWith('/models/') || reqPath.startsWith('/voice_model/')) {
+  if (reqPath.startsWith('/models/')) {
+    // Check local app/models first (where face-api shards reside)
+    const appModelsPath = path.join(BASE_DIR, reqPath);
+    if (fs.existsSync(appModelsPath)) {
+      filePath = appModelsPath;
+    } else {
+      filePath = path.join(ROOT_DIR, reqPath);
+    }
+    if (!filePath.startsWith(ROOT_DIR) && !filePath.startsWith(BASE_DIR)) {
+      res.writeHead(403);
+      res.end('Access denied');
+      return;
+    }
+  } else if (reqPath.startsWith('/text_model/') || reqPath.startsWith('/face_model/') || reqPath.startsWith('/voice_model/')) {
     filePath = path.join(ROOT_DIR, reqPath);
     if (!filePath.startsWith(ROOT_DIR)) {
       res.writeHead(403);

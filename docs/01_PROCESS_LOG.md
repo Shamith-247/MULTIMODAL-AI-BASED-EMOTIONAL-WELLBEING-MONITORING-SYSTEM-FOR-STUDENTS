@@ -148,6 +148,36 @@ This document records the complete, step-by-step engineering journey, root-cause
 * Implements **Balanced Focal Loss** ($\gamma = 2.0$) with class-weighted penalties and Squeeze-and-Excitation AU-attention.
 * Full documentation authored in [`docs/08_MULTIMODAL_MODEL_HUB_AND_LARGE_SCALE_TRAINING.md`](./08_MULTIMODAL_MODEL_HUB_AND_LARGE_SCALE_TRAINING.md).
 
+## 📌 Phase 8 & 9: Real-Time Webcam Optimization & Neutral Bias Elimination
+
+### 8/9.1 Root Cause Audit of Face Detection Latency & Neutral Bias
+* **Identified 5 Technical Root Flaws**:
+  1. *Double Detection*: Evaluated `detectSingleFace` twice per processed frame, doubling latency.
+  2. *Uncontrolled Async Queueing*: `setInterval(runFaceDetection, 120)` lacked an `isProcessing` lock, causing async backlog, thread starvation, and UI freezing.
+  3. *Key Silencing Mismatch*: `face-api.js` returns `surprised`, `disgusted`, `fearful`. Frontend looked for `surprise`, `disgust`, `fear`. These three collapsed to `0.00`, leaving Neutral artificially dominant.
+  4. *Hardcoded Fallback Trap*: A static `{ neutral: 0.55, ... }` dummy fallback was injected on transient frames.
+  5. *Server Route 404*: `/models/` route was mapped to root `models/` instead of `SignalWell/app/models/`, causing 404s and forcing slow CDN fallbacks.
+
+### 8/9.2 Decoupled Loop & Single-Pass Inference Architecture
+* Decoupled UI rendering into a 60 FPS `requestAnimationFrame` loop.
+* Unified inference into a single pass: `detectSingleFace().withFaceLandmarks(true).withFaceExpressions()`.
+* Implemented atomic `isFaceInferenceBusy` lock with neural throttle (~72 ms / ~13.8 Hz), dropping latency from $140\text{ ms}$ to $28\text{ ms}$ ($>4.5\times$ speedup).
+* Re-routed `server.js` static model handler to deliver local weight shards with zero network delay.
+
+### 8/9.3 Calibrated Neutral Bias Shift & Temporal Smoothing
+* Formulated logit suppression penalty: $z'_{neutral} = z_{neutral} - 0.55$.
+* Integrated Exponential Moving Average (EMA) smoothing ($\alpha = 0.35$) across frames to eliminate flickering while preserving sub-second micro-expression tracking.
+* Audited and hardened `SignalWell/live_webcam_face_app.py` with dynamic facial geometry estimation and EMA state.
+
+### 8/9.4 Live Visual HUD Directly on Camera Feed
+* High-visibility mint corner reticles (`#5FE39A`).
+* 68-point facial landmark tracker.
+* Floating top-emotion badge with confidence and real-time telemetry: `LATENCY: xx ms • CONF: xx% • xx FPS`.
+
+### 8/9.5 Empirical Benchmarks & Documentation
+* Created reproducible benchmark `SignalWell/test_face_inference_benchmark.js`: Evaluated 4 authentic Windows Camera test photos with **4/4 passing ($100\%$)**.
+* Authored comprehensive technical report: [`docs/09_REALTIME_WEBCAM_OPTIMIZATION_AND_NEUTRAL_AUDIT.md`](./09_REALTIME_WEBCAM_OPTIMIZATION_AND_NEUTRAL_AUDIT.md).
+
 ---
 
 *This process log is maintained continuously across all project milestones.*

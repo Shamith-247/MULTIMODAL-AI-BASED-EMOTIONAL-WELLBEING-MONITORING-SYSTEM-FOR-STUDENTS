@@ -408,8 +408,15 @@ function getLuminance(v){
   return sum / (data.length / 4);
 }
 
+let isFaceInferenceBusy = false;
+let testEmaProbs = null;
+let lastInferenceStamp = 0;
+let inferenceDurationMs = 0;
+let consecutiveMissCount = 0;
+
 async function detectLoop(){
   if(!isDetecting) return;
+  animId = requestAnimationFrame(detectLoop);
 
   // FPS calculation
   frameCount++;
@@ -421,235 +428,229 @@ async function detectLoop(){
     lastTime = now;
   }
 
-  if(video.readyState >= 2 && video.videoWidth > 0){
-    if(canvas.width !== video.videoWidth || canvas.height !== video.videoHeight){
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-    }
+  if(video.readyState < 2 || video.videoWidth === 0) return;
 
-    const cw = canvas.width, ch = canvas.height;
-
-    // Luminance assessment
-    const lum = Math.round(getLuminance(video));
-    const lumTag = lum < 50 ? 'Too Dark (<50)' : (lum > 185 ? 'Backlit (>185)' : `Optimal (${lum})`);
-    document.getElementById('lightLevel').textContent = lumTag;
-
-    // Multi-tier detection
-    let detection = null;
-    let landmarks = null;
-    let expressions = null;
-
-    // Tier 1: Sensitive TinyFace 320
-    try {
-      detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.15 }));
-    } catch(e){}
-
-    // Tier 2: Low-threshold TinyFace 224
-    if(!detection){
-      try {
-        detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.10 }));
-      } catch(e){}
-    }
-
-    // Tier 3: SSD MobileNet
-    if(!detection && faceapi.nets.ssdMobilenetv1 && faceapi.nets.ssdMobilenetv1.isLoaded){
-      try {
-        detection = await faceapi.detectSingleFace(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.18 }));
-      } catch(e){}
-    }
-
-    // Tier 4: Native Browser FaceDetector
-    if(!detection && window.FaceDetector){
-      try {
-        const nd = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
-        const faces = await nd.detect(video);
-        if(faces && faces.length > 0){
-          const b = faces[0].boundingBox;
-          detection = { box: { x: b.x, y: b.y, width: b.width, height: b.height }, score: 0.88 };
-        }
-      } catch(e){}
-    }
-
-    // Clear previous frame
-    ctx.clearRect(0, 0, cw, ch);
-
-    if(!detection){
-      document.getElementById('faceDetected').textContent = 'Searching…';
-      document.getElementById('faceDetected').style.color = '#E5A84B';
-      document.getElementById('faceConf').textContent = '--';
-
-      // Draw Center Reticle on canvas
-      const rx = cw * 0.25, ry = ch * 0.16, rw = cw * 0.5, rh = ch * 0.68;
-      ctx.save();
-      ctx.setLineDash([8, 8]);
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = 'rgba(95, 227, 154, 0.35)';
-      ctx.strokeRect(rx, ry, rw, rh);
-      ctx.restore();
-
-      // On-screen searching pill
-      const bannerW = 320, bannerH = 38;
-      const bx = (cw - bannerW) / 2, by = ry + rh / 2 - 19;
-      ctx.fillStyle = 'rgba(12, 15, 20, 0.88)';
-      ctx.strokeStyle = '#5FE39A';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      if(ctx.roundRect){ ctx.roundRect(bx, by, bannerW, bannerH, 19); } else { ctx.rect(bx, by, bannerW, bannerH); }
-      ctx.fill(); ctx.stroke();
-
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = 'bold 13px "JetBrains Mono", monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText('SCANNING: Position face in center', cw / 2, by + 24);
-    } else {
-      document.getElementById('faceDetected').textContent = 'YES';
-      document.getElementById('faceDetected').style.color = '#5FE39A';
-      const confPct = Math.round((detection.score || 0.85) * 100);
-      document.getElementById('faceConf').textContent = confPct + '%';
-
-      // Extract landmarks and expressions
-      try {
-        const full = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.10 }))
-                                  .withFaceLandmarks(true)
-                                  .withFaceExpressions();
-        if(full){
-          landmarks = full.landmarks;
-          expressions = full.expressions;
-        }
-      } catch(e){}
-
-      const box = detection.box;
-
-      // Calculate emotion probabilities with neutral dampening
-      const rawExp = expressions || { neutral: 0.55, happy: 0.20, surprised: 0.10, sad: 0.08, angry: 0.07 };
-      const neutralPenalty = parseFloat(dampSlider.value);
-      const factor = Math.exp(-neutralPenalty);
-      let adjusted = {};
-      let sum = 0;
-      for(const [k, v] of Object.entries(rawExp)){
-        const val = (k === 'neutral') ? (v * factor) : v;
-        adjusted[k] = val;
-        sum += val;
-      }
-      for(const k of Object.keys(adjusted)){
-        adjusted[k] = adjusted[k] / (sum || 1);
-      }
-
-      const happy = adjusted.happy || adjusted.happiness || 0;
-      const neutral = adjusted.neutral || 0;
-      const surprise = adjusted.surprised || adjusted.surprise || 0;
-      const sad = adjusted.sad || adjusted.sadness || 0;
-      const angry = adjusted.angry || adjusted.anger || 0;
-
-      // Update sidebar
-      const ranks = [
-        ['Happiness', happy, '😊'],
-        ['Neutral', neutral, '😐'],
-        ['Surprise', surprise, '😮'],
-        ['Sadness', sad, '😢'],
-        ['Anger', angry, '😠']
-      ].sort((a,b) => b[1] - a[1]);
-
-      const top = ranks[0];
-      document.getElementById('domEmotion').textContent = `${top[2]} ${top[0]} (${Math.round(top[1]*100)}%)`;
-
-      document.getElementById('p-happy').textContent = Math.round(happy*100) + '%';
-      document.getElementById('b-happy').style.width = (happy*100) + '%';
-      document.getElementById('p-neutral').textContent = Math.round(neutral*100) + '%';
-      document.getElementById('b-neutral').style.width = (neutral*100) + '%';
-      document.getElementById('p-surprise').textContent = Math.round(surprise*100) + '%';
-      document.getElementById('b-surprise').style.width = (surprise*100) + '%';
-      document.getElementById('p-sad').textContent = Math.round(sad*100) + '%';
-      document.getElementById('b-sad').style.width = (sad*100) + '%';
-      document.getElementById('p-angry').textContent = Math.round(angry*100) + '%';
-      document.getElementById('b-angry').style.width = (angry*100) + '%';
-
-      // ==========================================================
-      // --- RENDER VISUAL OUTPUT DIRECTLY ON THE FACE OVERLAY ---
-      // ==========================================================
-
-      // 1. Draw Corner Tracking Brackets
-      const corner = Math.min(28, box.width * 0.22);
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = '#5FE39A';
-      ctx.lineCap = 'round';
-      
-      ctx.beginPath();
-      ctx.moveTo(box.x, box.y + corner); ctx.lineTo(box.x, box.y); ctx.lineTo(box.x + corner, box.y);
-      ctx.moveTo(box.x + box.width - corner, box.y); ctx.lineTo(box.x + box.width, box.y); ctx.lineTo(box.x + box.width, box.y + corner);
-      ctx.moveTo(box.x, box.y + box.height - corner); ctx.lineTo(box.x, box.y + box.height); ctx.lineTo(box.x + corner, box.y + box.height);
-      ctx.moveTo(box.x + box.width - corner, box.y + box.height); ctx.lineTo(box.x + box.width, box.y + box.height); ctx.lineTo(box.x + box.width, box.y + box.height - corner);
-      ctx.stroke();
-
-      // Subtle face box fill
-      ctx.fillStyle = 'rgba(95, 227, 154, 0.08)';
-      ctx.fillRect(box.x, box.y, box.width, box.height);
-
-      // 2. Draw Facial Landmark Points directly on eyes, nose, mouth
-      if(landmarks && landmarks.positions){
-        ctx.fillStyle = '#5FE39A';
-        const pts = [36, 39, 42, 45, 30, 48, 54, 8];
-        for(const idx of pts){
-          const pt = landmarks.positions[idx];
-          if(pt){
-            ctx.beginPath();
-            ctx.arc(pt.x, pt.y, 3.2, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
-      }
-
-      // 3. FLOATING OUTPUT BADGE DIRECTLY ABOVE THE HEAD
-      const badgeW = Math.max(220, box.width * 0.95);
-      const badgeH = 46;
-      const badgeX = Math.max(10, Math.min(cw - badgeW - 10, box.x + (box.width - badgeW) / 2));
-      const badgeY = Math.max(10, box.y - badgeH - 10);
-
-      ctx.fillStyle = 'rgba(12, 15, 20, 0.92)';
-      ctx.strokeStyle = '#5FE39A';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      if(ctx.roundRect){ ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 10); } else { ctx.rect(badgeX, badgeY, badgeW, badgeH); }
-      ctx.fill(); ctx.stroke();
-
-      // Line 1: Primary Emotion & Percentage
-      ctx.textAlign = 'left';
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = 'bold 15px "Plus Jakarta Sans", sans-serif';
-      ctx.fillText(`${top[2]} ${top[0].toUpperCase()} (${Math.round(top[1]*100)}%)`, badgeX + 12, badgeY + 20);
-
-      // Line 2: Confidence and Tracking status
-      ctx.fillStyle = '#5FE39A';
-      ctx.font = '600 11px "JetBrains Mono", monospace';
-      ctx.fillText(`CONF: ${confPct}% • TRACKING ACTIVE`, badgeX + 12, badgeY + 36);
-
-      // 4. MINI PROBABILITY PILL UNDER CHIN
-      const subPillW = Math.max(180, box.width * 0.85);
-      const subPillH = 22;
-      const subPillX = Math.max(10, Math.min(cw - subPillW - 10, box.x + (box.width - subPillW) / 2));
-      const subPillY = Math.min(ch - subPillH - 8, box.y + box.height + 8);
-      ctx.fillStyle = 'rgba(12, 15, 20, 0.88)';
-      ctx.strokeStyle = 'rgba(95, 227, 154, 0.4)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      if(ctx.roundRect){ ctx.roundRect(subPillX, subPillY, subPillW, subPillH, 6); } else { ctx.rect(subPillX, subPillY, subPillW, subPillH); }
-      ctx.fill(); ctx.stroke();
-
-      ctx.fillStyle = '#C7CCD6';
-      ctx.font = '10.5px "JetBrains Mono", monospace';
-      ctx.textAlign = 'center';
-      const subText = ranks.slice(0, 3).map(r => `${r[0].slice(0,3)}:${Math.round(r[1]*100)}%`).join('  ');
-      ctx.fillText(subText, subPillX + subPillW / 2, subPillY + 15);
-
-      // 5. Watermark Status in Top-Left Corner
-      ctx.textAlign = 'left';
-      ctx.fillStyle = '#5FE39A';
-      ctx.font = '600 11px "JetBrains Mono", monospace';
-      ctx.fillText(`● TRACKING ACTIVE • ${cw}x${ch} • ${currentFps} FPS`, 14, 22);
-    }
+  if(canvas.width !== video.videoWidth || canvas.height !== video.videoHeight){
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
   }
 
-  animId = requestAnimationFrame(detectLoop);
+  const cw = canvas.width, ch = canvas.height;
+
+  // Luminance assessment
+  const lum = Math.round(getLuminance(video));
+  const lumTag = lum < 50 ? 'Too Dark (<50)' : (lum > 185 ? 'Backlit (>185)' : `Optimal (${lum})`);
+  document.getElementById('lightLevel').textContent = lumTag;
+
+  // Decoupled throttle: trigger neural inference at ~12-14 Hz without blocking camera render
+  if(!isFaceInferenceBusy && (now - lastInferenceStamp >= 72)){
+    isFaceInferenceBusy = true;
+    const tStart = performance.now();
+
+    try {
+      // Single-pass integrated detection + 68 landmarks + 7 expression probabilities
+      const inputSize = consecutiveMissCount > 4 ? 320 : 224;
+      const full = await faceapi
+        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize, scoreThreshold: 0.12 }))
+        .withFaceLandmarks(true)
+        .withFaceExpressions();
+
+      inferenceDurationMs = Math.round(performance.now() - tStart);
+      lastInferenceStamp = performance.now();
+      isFaceInferenceBusy = false;
+
+      ctx.clearRect(0, 0, cw, ch);
+
+      if(!full || !full.detection || full.detection.box.width < 35 || full.detection.box.height < 35){
+        consecutiveMissCount++;
+        if(consecutiveMissCount > 3){
+          document.getElementById('faceDetected').textContent = 'Searching…';
+          document.getElementById('faceDetected').style.color = '#E5A84B';
+          document.getElementById('faceConf').textContent = '--';
+
+          // Draw Center Reticle on canvas
+          const rx = cw * 0.25, ry = ch * 0.16, rw = cw * 0.5, rh = ch * 0.68;
+          ctx.save();
+          ctx.setLineDash([8, 8]);
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = 'rgba(95, 227, 154, 0.35)';
+          ctx.strokeRect(rx, ry, rw, rh);
+          ctx.restore();
+
+          const bannerW = 320, bannerH = 38;
+          const bx = (cw - bannerW) / 2, by = ry + rh / 2 - 19;
+          ctx.fillStyle = 'rgba(12, 15, 20, 0.88)';
+          ctx.strokeStyle = '#5FE39A';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          if(ctx.roundRect){ ctx.roundRect(bx, by, bannerW, bannerH, 19); } else { ctx.rect(bx, by, bannerW, bannerH); }
+          ctx.fill(); ctx.stroke();
+
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = 'bold 13px "JetBrains Mono", monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText('SCANNING: Position face in center', cw / 2, by + 24);
+        }
+      } else {
+        consecutiveMissCount = 0;
+        document.getElementById('faceDetected').textContent = 'YES';
+        document.getElementById('faceDetected').style.color = '#5FE39A';
+        const confPct = Math.round((full.detection.score || 0.85) * 100);
+        document.getElementById('faceConf').textContent = confPct + '%';
+
+        const box = full.detection.box;
+        const landmarks = full.landmarks;
+        const rawExp = full.expressions || {};
+
+        // Calculate emotion probabilities with calibrated neutral dampening
+        const happyRaw   = rawExp.happy    || rawExp.happiness || 0;
+        const neutralRaw = rawExp.neutral  || 0;
+        const sadRaw     = rawExp.sad      || rawExp.sadness   || 0;
+        const angryRaw   = rawExp.angry    || rawExp.anger     || 0;
+        const surpRaw    = rawExp.surprised|| rawExp.surprise  || 0;
+        const fearRaw    = rawExp.fearful  || rawExp.fear      || 0;
+        const disgustRaw = rawExp.disgusted|| rawExp.disgust   || 0;
+
+        const neutralPenalty = parseFloat(dampSlider.value || 0.55);
+        const factor = Math.exp(-neutralPenalty);
+        const adjustedNeutral = neutralRaw * factor;
+
+        const sum = (happyRaw + adjustedNeutral + sadRaw + angryRaw + surpRaw + fearRaw + disgustRaw) || 1;
+        const currentProbs = {
+          happy: happyRaw / sum,
+          neutral: adjustedNeutral / sum,
+          surprise: surpRaw / sum,
+          sad: sadRaw / sum,
+          angry: angryRaw / sum,
+          fear: fearRaw / sum,
+          disgust: disgustRaw / sum
+        };
+
+        // Temporal EMA smoothing
+        if(!testEmaProbs){
+          testEmaProbs = { ...currentProbs };
+        } else {
+          const alpha = 0.35;
+          for(const k of Object.keys(currentProbs)){
+            testEmaProbs[k] = alpha * currentProbs[k] + (1 - alpha) * (testEmaProbs[k] || 0);
+          }
+        }
+
+        const happy = testEmaProbs.happy;
+        const neutral = testEmaProbs.neutral;
+        const surprise = testEmaProbs.surprise;
+        const sad = testEmaProbs.sad;
+        const angry = testEmaProbs.angry;
+        const fear = testEmaProbs.fear;
+        const disgust = testEmaProbs.disgust;
+
+        // Update sidebar
+        const ranks = [
+          ['Happiness', happy, '😊'],
+          ['Neutral', neutral, '😐'],
+          ['Surprise', surprise, '😮'],
+          ['Sadness', sad, '😢'],
+          ['Anger', angry, '😠'],
+          ['Fear', fear, '😨'],
+          ['Disgust', disgust, '🤢']
+        ].sort((a,b) => b[1] - a[1]);
+
+        const top = ranks[0];
+        document.getElementById('domEmotion').textContent = `${top[2]} ${top[0]} (${Math.round(top[1]*100)}%)`;
+
+        document.getElementById('p-happy').textContent = Math.round(happy*100) + '%';
+        document.getElementById('b-happy').style.width = (happy*100) + '%';
+        document.getElementById('p-neutral').textContent = Math.round(neutral*100) + '%';
+        document.getElementById('b-neutral').style.width = (neutral*100) + '%';
+        document.getElementById('p-surprise').textContent = Math.round(surprise*100) + '%';
+        document.getElementById('b-surprise').style.width = (surprise*100) + '%';
+        document.getElementById('p-sad').textContent = Math.round(sad*100) + '%';
+        document.getElementById('b-sad').style.width = (sad*100) + '%';
+        document.getElementById('p-angry').textContent = Math.round(angry*100) + '%';
+        document.getElementById('b-angry').style.width = (angry*100) + '%';
+
+        // 1. Draw Corner Tracking Brackets
+        const corner = Math.min(28, box.width * 0.22);
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = '#5FE39A';
+        ctx.lineCap = 'round';
+        
+        ctx.beginPath();
+        ctx.moveTo(box.x, box.y + corner); ctx.lineTo(box.x, box.y); ctx.lineTo(box.x + corner, box.y);
+        ctx.moveTo(box.x + box.width - corner, box.y); ctx.lineTo(box.x + box.width, box.y); ctx.lineTo(box.x + box.width, box.y + corner);
+        ctx.moveTo(box.x, box.y + box.height - corner); ctx.lineTo(box.x, box.y + box.height); ctx.lineTo(box.x + corner, box.y + box.height);
+        ctx.moveTo(box.x + box.width - corner, box.y + box.height); ctx.lineTo(box.x + box.width, box.y + box.height); ctx.lineTo(box.x + box.width, box.y + box.height - corner);
+        ctx.stroke();
+
+        // Face box fill
+        ctx.fillStyle = 'rgba(95, 227, 154, 0.08)';
+        ctx.fillRect(box.x, box.y, box.width, box.height);
+
+        // 2. Facial Landmark Points
+        if(landmarks && landmarks.positions){
+          ctx.fillStyle = '#5FE39A';
+          const pts = [36, 39, 42, 45, 30, 48, 54, 8];
+          for(const idx of pts){
+            const pt = landmarks.positions[idx];
+            if(pt){
+              ctx.beginPath();
+              ctx.arc(pt.x, pt.y, 3.2, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+        }
+
+        // 3. Floating Output Badge
+        const badgeW = Math.max(220, box.width * 0.95);
+        const badgeH = 46;
+        const badgeX = Math.max(10, Math.min(cw - badgeW - 10, box.x + (box.width - badgeW) / 2));
+        const badgeY = Math.max(10, box.y - badgeH - 10);
+
+        ctx.fillStyle = 'rgba(12, 15, 20, 0.92)';
+        ctx.strokeStyle = '#5FE39A';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        if(ctx.roundRect){ ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 10); } else { ctx.rect(badgeX, badgeY, badgeW, badgeH); }
+        ctx.fill(); ctx.stroke();
+
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 15px "Plus Jakarta Sans", sans-serif';
+        ctx.fillText(`${top[2]} ${top[0].toUpperCase()} (${Math.round(top[1]*100)}%)`, badgeX + 12, badgeY + 20);
+
+        ctx.fillStyle = '#5FE39A';
+        ctx.font = '600 11px "JetBrains Mono", monospace';
+        ctx.fillText(`CONF: ${confPct}% • ${inferenceDurationMs}ms`, badgeX + 12, badgeY + 36);
+
+        // 4. Mini Probability Pill under Chin
+        const subPillW = Math.max(180, box.width * 0.85);
+        const subPillH = 22;
+        const subPillX = Math.max(10, Math.min(cw - subPillW - 10, box.x + (box.width - subPillW) / 2));
+        const subPillY = Math.min(ch - subPillH - 8, box.y + box.height + 8);
+        ctx.fillStyle = 'rgba(12, 15, 20, 0.88)';
+        ctx.strokeStyle = 'rgba(95, 227, 154, 0.4)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        if(ctx.roundRect){ ctx.roundRect(subPillX, subPillY, subPillW, subPillH, 6); } else { ctx.rect(subPillX, subPillY, subPillW, subPillH); }
+        ctx.fill(); ctx.stroke();
+
+        ctx.fillStyle = '#C7CCD6';
+        ctx.font = '10.5px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        const subText = ranks.slice(0, 3).map(r => `${r[0].slice(0,3)}:${Math.round(r[1]*100)}%`).join('  ');
+        ctx.fillText(subText, subPillX + subPillW / 2, subPillY + 15);
+
+        // 5. Watermark Status in Top-Left Corner
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#5FE39A';
+        ctx.font = '600 11px "JetBrains Mono", monospace';
+        ctx.fillText(`● TRACKING ACTIVE • ${cw}x${ch} • ${currentFps} FPS • ${inferenceDurationMs}ms`, 14, 22);
+      }
+    } catch(err) {
+      console.warn('Inference error:', err);
+      isFaceInferenceBusy = false;
+    }
+  }
 }
 
 // Snapshot Capture Button

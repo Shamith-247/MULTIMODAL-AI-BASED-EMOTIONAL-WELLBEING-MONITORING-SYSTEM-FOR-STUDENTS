@@ -919,7 +919,9 @@ faceToggle.addEventListener('click', async () => {
     $('cameraPermModal').classList.add('show');
   } else {
     state.face.active = false;
-    clearInterval(faceInterval);
+    if(faceAnimId){ cancelAnimationFrame(faceAnimId); faceAnimId = null; }
+    isFaceDetecting = false;
+    faceEmaProbs = null;
     const stream = $('faceVideo').srcObject;
     if(stream) stream.getTracks().forEach(t=>t.stop());
     $('faceVideo').srcObject = null;
@@ -1111,37 +1113,55 @@ async function startCameraFlow(){
     await Promise.all([
       loadWithFallback(faceapi.nets.tinyFaceDetector),
       loadWithFallback(faceapi.nets.faceLandmark68Net),
-      loadWithFallback(faceapi.nets.faceExpressionNet),
-      loadWithFallback(faceapi.nets.ssdMobilenetv1).catch(()=>{})
+      loadWithFallback(faceapi.nets.faceExpressionNet)
     ]);
 
-    // Try custom ONNX model if configured
-    if(!faceOrtSession && FACE_MODEL_URL && !FACE_MODEL_URL.includes('YOUR_HF_USERNAME')){
-      try{
-        faceOrtSession = await ort.InferenceSession.create(FACE_MODEL_URL);
-        faceEngine = 'onnx-v7';
-      }catch(onnxErr){
-        console.warn('Custom ONNX model not reachable, using client-side ExpressionNet:', onnxErr);
-        faceEngine = 'expression-net';
-      }
-    } else if(faceOrtSession){
-      faceEngine = 'onnx-v7';
-    } else {
-      faceEngine = 'expression-net';
-    }
-
+    faceEngine = 'expression-net';
     $('faceSub').textContent = 'Detector active — scanning webcam feed…';
-    clearInterval(faceInterval);
-    faceInterval = setInterval(runFaceDetection, 120);
+
+    if(faceAnimId) cancelAnimationFrame(faceAnimId);
+    faceRenderLoop();
   }catch(err){
+    console.error('Detection setup error:', err);
     $('faceSub').textContent = 'Detection setup failed: ' + err.message;
   }
 }
 
-async function runFaceDetection(){
+let faceAnimId = null;
+let isFaceDetecting = false;
+let faceEmaProbs = null;
+let lastFaceInferenceTime = 0;
+let faceInferenceLatencyMs = 0;
+let faceRenderFrameCount = 0;
+let faceRenderFpsLastTime = performance.now();
+let faceEffectiveFps = 0;
+let faceConsecutiveMisses = 0;
+
+function faceRenderLoop(){
+  if(!state.face.active) return;
+  faceAnimId = requestAnimationFrame(faceRenderLoop);
+
+  // Measure camera display FPS
+  faceRenderFrameCount++;
+  const now = performance.now();
+  if(now - faceRenderFpsLastTime >= 1000){
+    faceEffectiveFps = Math.round((faceRenderFrameCount * 1000) / (now - faceRenderFpsLastTime));
+    faceRenderFrameCount = 0;
+    faceRenderFpsLastTime = now;
+  }
+
   const video = $('faceVideo');
   if(!video || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return;
 
+  // Decoupled throttle: run neural inference at ~12-14 FPS without blocking 60 FPS video rendering
+  if(!isFaceDetecting && (now - lastFaceInferenceTime >= 72)){
+    isFaceDetecting = true;
+    runSinglePassFaceInference(video);
+  }
+}
+
+async function runSinglePassFaceInference(video){
+  const tStart = performance.now();
   const overlayCanvas = $('faceCanvas');
   const overlayCtx = overlayCanvas ? overlayCanvas.getContext('2d') : null;
   if(overlayCanvas && (overlayCanvas.width !== video.videoWidth || overlayCanvas.height !== video.videoHeight)){
@@ -1151,187 +1171,100 @@ async function runFaceDetection(){
   const cw = overlayCanvas ? overlayCanvas.width : video.videoWidth;
   const ch = overlayCanvas ? overlayCanvas.height : video.videoHeight;
 
-  // --- Multi-Tier Face Detection Cascade ---
-  // Tier 1: TinyFaceDetector 320 with scoreThreshold 0.15 (Fastest, ~15ms, robust under motion)
-  // Tier 2: TinyFaceDetector 224 with scoreThreshold 0.10 (Handles deep shadow & window backlight)
-  // Tier 3: SSD MobileNet V1 with minConfidence 0.18
-  // Tier 4: Hardware-accelerated browser FaceDetector (Chrome/Edge native)
-  let detection = null;
-  let landmarks = null;
-  let expressions = null;
-
-  try{
-    if(faceapi.nets.tinyFaceDetector && faceapi.nets.tinyFaceDetector.isLoaded){
-      detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.15 }));
-    }
-  }catch(e){}
-
-  if(!detection && faceapi.nets.tinyFaceDetector && faceapi.nets.tinyFaceDetector.isLoaded){
-    try{
-      detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.10 }));
-    }catch(e){}
+  let result = null;
+  try {
+    // Single-pass integrated detection + 68 landmarks + 7 expression probabilities
+    const inputSize = faceConsecutiveMisses > 4 ? 320 : 224;
+    result = await faceapi
+      .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize, scoreThreshold: 0.12 }))
+      .withFaceLandmarks(true)
+      .withFaceExpressions();
+  } catch(err) {
+    console.warn('Face inference error:', err);
   }
 
-  if(!detection && faceapi.nets.ssdMobilenetv1 && faceapi.nets.ssdMobilenetv1.isLoaded){
-    try{
-      detection = await faceapi.detectSingleFace(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.18 }));
-    }catch(e){}
-  }
+  faceInferenceLatencyMs = Math.round(performance.now() - tStart);
+  lastFaceInferenceTime = performance.now();
+  isFaceDetecting = false;
 
-  if(!detection && window.FaceDetector){
-    try{
-      const nativeDetector = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
-      const faces = await nativeDetector.detect(video);
-      if(faces && faces.length > 0){
-        const b = faces[0].boundingBox;
-        detection = { box: { x: b.x, y: b.y, width: b.width, height: b.height }, score: 0.88 };
+  if(!result || !result.detection || result.detection.box.width < 35 || result.detection.box.height < 35){
+    faceConsecutiveMisses++;
+    if(faceConsecutiveMisses > 3){
+      if(overlayCtx && overlayCanvas){
+        overlayCtx.clearRect(0, 0, cw, ch);
+        // Centered dashed positioning frame
+        const rx = cw * 0.25, ry = ch * 0.16, rw = cw * 0.50, rh = ch * 0.68;
+        overlayCtx.save();
+        overlayCtx.setLineDash([8, 8]);
+        overlayCtx.lineWidth = 2;
+        overlayCtx.strokeStyle = 'rgba(143, 163, 119, 0.40)';
+        overlayCtx.strokeRect(rx, ry, rw, rh);
+        overlayCtx.restore();
+
+        // Scanning banner
+        const bannerW = 280, bannerH = 34;
+        const bx = (cw - bannerW) / 2, by = ry + rh / 2 - 17;
+        overlayCtx.fillStyle = 'rgba(16, 20, 28, 0.88)';
+        overlayCtx.strokeStyle = 'rgba(143, 163, 119, 0.65)';
+        overlayCtx.lineWidth = 1.5;
+        overlayCtx.beginPath();
+        if(overlayCtx.roundRect){ overlayCtx.roundRect(bx, by, bannerW, bannerH, 17); } else { overlayCtx.rect(bx, by, bannerW, bannerH); }
+        overlayCtx.fill();
+        overlayCtx.stroke();
+
+        overlayCtx.fillStyle = '#EDE7DA';
+        overlayCtx.font = '600 12px "JetBrains Mono", monospace';
+        overlayCtx.textAlign = 'center';
+        overlayCtx.fillText('SCANNING: Position face in lighting', cw / 2, by + 21);
       }
-    }catch(e){}
-  }
-
-  // --- IF NO FACE DETECTED: Render clear visual scanning guide directly on camera feed ---
-  if(!detection){
-    if(overlayCtx && overlayCanvas){
-      overlayCtx.clearRect(0, 0, cw, ch);
-
-      // Centered dashed positioning frame
-      const rx = cw * 0.25, ry = ch * 0.16, rw = cw * 0.50, rh = ch * 0.68;
-      overlayCtx.save();
-      overlayCtx.setLineDash([8, 8]);
-      overlayCtx.lineWidth = 2;
-      overlayCtx.strokeStyle = 'rgba(143, 163, 119, 0.40)';
-      overlayCtx.strokeRect(rx, ry, rw, rh);
-      overlayCtx.restore();
-
-      // Scanning banner in center of camera
-      const bannerW = 280, bannerH = 34;
-      const bx = (cw - bannerW) / 2, by = ry + rh / 2 - 17;
-      overlayCtx.fillStyle = 'rgba(16, 20, 28, 0.88)';
-      overlayCtx.strokeStyle = 'rgba(143, 163, 119, 0.65)';
-      overlayCtx.lineWidth = 1.5;
-      overlayCtx.beginPath();
-      if(overlayCtx.roundRect){ overlayCtx.roundRect(bx, by, bannerW, bannerH, 17); } else { overlayCtx.rect(bx, by, bannerW, bannerH); }
-      overlayCtx.fill();
-      overlayCtx.stroke();
-
-      overlayCtx.fillStyle = '#EDE7DA';
-      overlayCtx.font = '600 12px "JetBrains Mono", monospace';
-      overlayCtx.textAlign = 'center';
-      overlayCtx.fillText('SCANNING: Position face in lighting', cw / 2, by + 21);
+      $('faceSub').textContent = 'Scanning for face… Center face in camera lighting';
     }
-    $('faceSub').textContent = 'Scanning for face… Center face in camera lighting';
     return;
   }
 
-  // --- Extract landmarks & expressions if available ---
-  if(faceapi.nets.faceLandmark68Net && faceapi.nets.faceLandmark68Net.isLoaded && faceapi.nets.faceExpressionNet && faceapi.nets.faceExpressionNet.isLoaded){
-    try{
-      const full = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.10 }))
-                                .withFaceLandmarks(true)
-                                .withFaceExpressions();
-      if(full){
-        landmarks = full.landmarks;
-        expressions = full.expressions;
-      }
-    }catch(e){}
-  }
+  faceConsecutiveMisses = 0;
+  const box = result.detection.box;
+  const landmarks = result.landmarks;
+  const rawExp = result.expressions || {};
 
-  const box = detection.box;
+  // Exact Key Normalization (avoids zeroing out surprise, disgust, fear!)
+  const happyRaw   = rawExp.happy    || rawExp.happiness || 0;
+  const neutralRaw = rawExp.neutral  || 0;
+  const sadRaw     = rawExp.sad      || rawExp.sadness   || 0;
+  const angryRaw   = rawExp.angry    || rawExp.anger     || 0;
+  const surpRaw    = rawExp.surprised|| rawExp.surprise  || 0;
+  const fearRaw    = rawExp.fearful  || rawExp.fear      || 0;
+  const disgustRaw = rawExp.disgusted|| rawExp.disgust   || 0;
 
-  // Crop face with margin for classification
-  const marginX = box.width * 0.2, marginY = box.height * 0.2;
-  const sx = Math.max(0, box.x - marginX), sy = Math.max(0, box.y - marginY);
-  const sw = Math.min(video.videoWidth - sx, box.width + marginX * 2);
-  const sh = Math.min(video.videoHeight - sy, box.height + marginY * 2);
-  faceCropCtx.drawImage(video, sx, sy, sw, sh, 0, 0, 160, 160);
+  // Calibrated Neutral Suppression Offset
+  const neutralPenalty = parseFloat($('faceNeutralDamp')?.value || 0.55);
+  const factor = Math.exp(-neutralPenalty);
+  const adjustedNeutral = neutralRaw * factor;
 
-  // Apply lighting contrast correction (removes harsh window backlight)
-  applyFaceContrastCorrection(faceCropCtx, 160, 160);
+  const rawTotal = (happyRaw + adjustedNeutral + sadRaw + angryRaw + surpRaw + fearRaw + disgustRaw) || 1;
+  const currentProbs = {
+    happy: happyRaw / rawTotal,
+    neutral: adjustedNeutral / rawTotal,
+    sad: sadRaw / rawTotal,
+    angry: angryRaw / rawTotal,
+    surprise: surpRaw / rawTotal,
+    fear: fearRaw / rawTotal,
+    disgust: disgustRaw / rawTotal
+  };
 
-  const neutralPenalty = parseFloat($('faceNeutralDamp')?.value || 1.3);
-  let p = {};
-
-  if(faceEngine === 'onnx-v7' && faceOrtSession){
-    try{
-      const { data } = faceCropCtx.getImageData(0, 0, 160, 160);
-      const floatData = new Float32Array(3 * 160 * 160);
-      for(let i = 0; i < 160 * 160; i++){
-        floatData[i]                 = (data[i*4]   / 255 - 0.5) / 0.5;
-        floatData[160*160 + i]       = (data[i*4+1] / 255 - 0.5) / 0.5;
-        floatData[160*160*2 + i]     = (data[i*4+2] / 255 - 0.5) / 0.5;
-      }
-      const inputTensor = new ort.Tensor('float32', floatData, [1, 3, 160, 160]);
-      const inputName = faceOrtSession.inputNames[0];
-      const results = await faceOrtSession.run({ [inputName]: inputTensor });
-      const logits = Array.from(results[faceOrtSession.outputNames[0]].data);
-
-      // --- LOGIT BIAS CORRECTION ---
-      const NEUTRAL_IDX = FACE_LABELS.indexOf('neutral');
-      if(NEUTRAL_IDX >= 0 && neutralPenalty > 0){
-        logits[NEUTRAL_IDX] -= neutralPenalty;
-      }
-
-      const maxLogit = Math.max(...logits);
-      const exps = logits.map(v => Math.exp(v - maxLogit));
-      const sumExp = exps.reduce((a,b) => a+b, 0) || 1;
-      const probs = exps.map(v => v / sumExp);
-      FACE_LABELS.forEach((label, i) => p[label] = probs[i]);
-    }catch(err){
-      console.warn('ONNX inference failed, falling back to ExpressionNet:', err);
-      faceEngine = 'expression-net';
+  // Exponential Moving Average (EMA) Temporal Smoothing (alpha = 0.35)
+  if(!faceEmaProbs){
+    faceEmaProbs = { ...currentProbs };
+  } else {
+    const alpha = 0.35;
+    for(const k of Object.keys(currentProbs)){
+      faceEmaProbs[k] = alpha * currentProbs[k] + (1 - alpha) * (faceEmaProbs[k] || 0);
     }
   }
 
-  if(faceEngine === 'expression-net' || Object.keys(p).length === 0){
-    const rawExp = expressions || detection.expressions || {
-      neutral: 0.55, happy: 0.20, sad: 0.08, surprised: 0.08, angry: 0.05, fear: 0.02, disgust: 0.02
-    };
-    const factor = Math.exp(-neutralPenalty);
-    let sum = 0;
-    for(const [label, val] of Object.entries(rawExp)){
-      const adjusted = (label === 'neutral') ? val * factor : val;
-      p[label] = adjusted;
-      sum += adjusted;
-    }
-    for(const label of Object.keys(p)){
-      p[label] = p[label] / (sum || 1);
-    }
-  }
-
-  // --- RESTING FACE CALIBRATION ---
-  if(armFaceCalibration || !faceBaseline){
-    faceBaseline = { ...p };
-    armFaceCalibration = false;
-  }
-
-  // Normalize label names between models
-  const happyProb = p.happiness || p.happy || 0;
-  const sadProb = p.sadness || p.sad || 0;
-  const angryProb = p.anger || p.angry || 0;
-  const surpProb = p.surprise || 0;
-  const neutralProb = p.neutral || 0;
-  const disgustProb = p.disgust || 0;
-  const fearProb = p.fear || 0;
-
-  // --- CALIBRATED WELLBEING VALENCE ---
-  const valence = (happyProb * 1.0 + surpProb * 0.25)
-                - (sadProb * 1.0 + angryProb * 1.0 + fearProb * 0.85 + disgustProb * 0.85);
-  const score = clamp(50 + valence * 50, 0, 100);
-  state.face.score = score;
-
-  // Ranked breakdown display
-  const allEmotions = [
-    ['happy', happyProb],
-    ['neutral', neutralProb],
-    ['sad', sadProb],
-    ['angry', angryProb],
-    ['surprise', surpProb],
-    ['fear', fearProb],
-    ['disgust', disgustProb]
-  ].sort((a,b) => b[1] - a[1]);
-
-  const topRanked = allEmotions.slice(0, 3);
-  const topEmotion = topRanked[0];
+  // Ranked breakdown
+  const allEmotions = Object.entries(faceEmaProbs).sort((a, b) => b[1] - a[1]);
+  const topEmotion = allEmotions[0];
   const emotionName = topEmotion[0].toUpperCase();
   const emotionPct = Math.round(topEmotion[1] * 100);
   const emotionEmoji = {
@@ -1339,37 +1272,37 @@ async function runFaceDetection(){
     surprise: '😮', fear: '😨', disgust: '🤢'
   }[topEmotion[0]] || '👤';
 
-  // =========================================================================
-  // --- RENDER VISUAL OUTPUT DIRECTLY ON THE WEBCAM (THERE ITSELF!) ---
-  // =========================================================================
+  // Calibrated Wellbeing Valence
+  const valence = (faceEmaProbs.happy * 1.0 + faceEmaProbs.surprise * 0.25)
+                - (faceEmaProbs.sad * 1.0 + faceEmaProbs.angry * 1.0 + faceEmaProbs.fear * 0.85 + faceEmaProbs.disgust * 0.85);
+  const score = clamp(50 + valence * 50, 0, 100);
+  state.face.score = score;
+
+  // Render Visual HUD Directly on Webcam Feed
   if(overlayCtx && overlayCanvas){
     overlayCtx.clearRect(0, 0, cw, ch);
 
-    // 1. Draw glowing corner tracking brackets
+    // 1. Corner Reticles
     const corner = Math.min(26, box.width * 0.22);
     overlayCtx.lineWidth = 3.5;
-    overlayCtx.strokeStyle = '#5FE39A'; // Neon emerald
+    overlayCtx.strokeStyle = '#5FE39A';
     overlayCtx.lineCap = 'round';
     
-    // Top-left
     overlayCtx.beginPath();
     overlayCtx.moveTo(box.x, box.y + corner); overlayCtx.lineTo(box.x, box.y); overlayCtx.lineTo(box.x + corner, box.y);
-    // Top-right
     overlayCtx.moveTo(box.x + box.width - corner, box.y); overlayCtx.lineTo(box.x + box.width, box.y); overlayCtx.lineTo(box.x + box.width, box.y + corner);
-    // Bottom-left
     overlayCtx.moveTo(box.x, box.y + box.height - corner); overlayCtx.lineTo(box.x, box.y + box.height); overlayCtx.lineTo(box.x + corner, box.y + box.height);
-    // Bottom-right
-    overlayCtx.moveTo(box.x + box.width - corner, box.y + box.height); overlayCtx.lineTo(box.x + box.width, box.y + box.height); overlayCtx.lineTo(box.x + box.width, box.y + corner);
+    overlayCtx.moveTo(box.x + box.width - corner, box.y + box.height); overlayCtx.lineTo(box.x + box.width, box.y + box.height); overlayCtx.lineTo(box.x + box.width, box.y + box.height - corner);
     overlayCtx.stroke();
 
-    // Subtle translucent face box tint
+    // Subtle face box fill
     overlayCtx.fillStyle = 'rgba(95, 227, 154, 0.08)';
     overlayCtx.fillRect(box.x, box.y, box.width, box.height);
 
-    // 2. Draw subtle facial landmark points on the face
+    // 2. Facial Landmark Points
     if(landmarks && landmarks.positions){
       overlayCtx.fillStyle = 'rgba(95, 227, 154, 0.75)';
-      const pts = [36, 39, 42, 45, 30, 48, 54, 8]; // key eye, nose, mouth points
+      const pts = [36, 39, 42, 45, 30, 48, 54, 8];
       for(const idx of pts){
         const pt = landmarks.positions[idx];
         if(pt){
@@ -1380,7 +1313,7 @@ async function runFaceDetection(){
       }
     }
 
-    // 3. FLOATING OUTPUT BADGE DIRECTLY ABOVE THE HEAD
+    // 3. Floating Output Badge
     const badgeW = Math.max(210, box.width * 0.95);
     const badgeH = 44;
     const badgeX = Math.max(8, Math.min(cw - badgeW - 8, box.x + (box.width - badgeW) / 2));
@@ -1394,19 +1327,17 @@ async function runFaceDetection(){
     overlayCtx.fill();
     overlayCtx.stroke();
 
-    // Line 1: Primary Emotion & Percentage
     overlayCtx.textAlign = 'left';
     overlayCtx.fillStyle = '#FFFFFF';
     overlayCtx.font = 'bold 14px "Plus Jakarta Sans", sans-serif';
     overlayCtx.fillText(`${emotionEmoji} ${emotionName} (${emotionPct}%)`, badgeX + 10, badgeY + 19);
 
-    // Line 2: Wellbeing Score & Confidence
     const tagColor = score >= 65 ? '#8FA377' : (score >= 40 ? '#8A93A6' : '#D98B4A');
     overlayCtx.fillStyle = tagColor;
     overlayCtx.font = '600 10.5px "JetBrains Mono", monospace';
-    overlayCtx.fillText(`WELLBEING: ${Math.round(score)}/100 • TRACKING ACTIVE`, badgeX + 10, badgeY + 35);
+    overlayCtx.fillText(`WELLBEING: ${Math.round(score)}/100 • ${faceInferenceLatencyMs}ms`, badgeX + 10, badgeY + 35);
 
-    // 4. MINI PROBABILITY PILL UNDER CHIN
+    // 4. Mini Probability Pill under Chin
     const subPillW = Math.max(170, box.width * 0.85);
     const subPillH = 20;
     const subPillX = Math.max(8, Math.min(cw - subPillW - 8, box.x + (box.width - subPillW) / 2));
@@ -1422,28 +1353,25 @@ async function runFaceDetection(){
     overlayCtx.fillStyle = '#C7CCD6';
     overlayCtx.font = '10px "JetBrains Mono", monospace';
     overlayCtx.textAlign = 'center';
-    const subText = topRanked.map(([l, prob]) => `${l.slice(0,3)}:${Math.round(prob*100)}%`).join('  ');
+    const subText = allEmotions.slice(0, 3).map(([l, prob]) => `${l.slice(0,3)}:${Math.round(prob*100)}%`).join('  ');
     overlayCtx.fillText(subText, subPillX + subPillW / 2, subPillY + 14);
 
-    // 5. CAMERA STATUS WATERMARK (Top-Left)
+    // 5. Status Telemetry
     overlayCtx.textAlign = 'left';
     overlayCtx.fillStyle = '#5FE39A';
     overlayCtx.font = '600 11px "JetBrains Mono", monospace';
-    overlayCtx.fillText(`● TRACKING ACTIVE • ${video.videoWidth}x${video.videoHeight}`, 12, 20);
+    overlayCtx.fillText(`● TRACKING ACTIVE • ${video.videoWidth}x${video.videoHeight} • ${faceEffectiveFps} FPS`, 12, 20);
   }
 
-  // Synchronize strip readings
+  // Update DOM readouts
   $('faceValue').textContent = Math.round(score);
-  const engineTag = faceEngine === 'onnx-v7' ? '[v7]' : '[ExpNet]';
-  $('faceSub').textContent = engineTag + ' ' +
-    topRanked.map(([label, prob]) => label + ' ' + Math.round(prob*100) + '%').join(' · ');
+  $('faceSub').textContent = `[ExpNet] ${emotionName} ${emotionPct}% · ${allEmotions[1][0]} ${Math.round(allEmotions[1][1]*100)}% · ${faceInferenceLatencyMs}ms`;
 
-  // Update expression bars
-  $('bar-happy').style.height = (happyProb * 100) + '%';
-  $('bar-sad').style.height = (sadProb * 100) + '%';
-  $('bar-angry').style.height = (angryProb * 100) + '%';
-  $('bar-surprised').style.height = (surpProb * 100) + '%';
-  $('bar-neutral').style.height = (neutralProb * 100) + '%';
+  $('bar-happy').style.height = (faceEmaProbs.happy * 100) + '%';
+  $('bar-sad').style.height = (faceEmaProbs.sad * 100) + '%';
+  $('bar-angry').style.height = (faceEmaProbs.angry * 100) + '%';
+  $('bar-surprised').style.height = (faceEmaProbs.surprise * 100) + '%';
+  $('bar-neutral').style.height = (faceEmaProbs.neutral * 100) + '%';
 
   faceScores.push(score);
   drawSpark('faceSpark', faceScores);
@@ -1898,7 +1826,8 @@ $('pauseBtn').addEventListener('click', () => {
   if(isPaused){
     // Stop analyzing — clear the live detection loops without dropping the camera/mic permission,
     // so resuming doesn't force the user to re-grant access.
-    if(faceInterval) clearInterval(faceInterval);
+    if(faceAnimId){ cancelAnimationFrame(faceAnimId); faceAnimId = null; }
+    isFaceDetecting = false;
     if(voiceInterval) clearInterval(voiceInterval);
 
     $('textAnalyzeBtn').disabled = true;
@@ -1911,7 +1840,7 @@ $('pauseBtn').addEventListener('click', () => {
     status.innerHTML = '<span class="dot-paused">●</span> ' + currentUser + ' — paused';
   } else {
     // Resume — only restart loops for channels the user had actually enabled.
-    if(state.face.active) faceInterval = setInterval(runFaceDetection, 1200);
+    if(state.face.active && !faceAnimId) faceRenderLoop();
     if(state.voice.active) voiceInterval = setInterval(analyzeVoice, 700);
 
     $('textAnalyzeBtn').disabled = false;
@@ -1934,7 +1863,9 @@ $('cancelConfirmBtn').addEventListener('click', () => {
   $('cancelConfirm').classList.remove('show');
 
   // Stop every live loop and release camera/mic.
-  if(faceInterval) clearInterval(faceInterval);
+  if(faceAnimId){ cancelAnimationFrame(faceAnimId); faceAnimId = null; }
+  isFaceDetecting = false;
+  faceEmaProbs = null;
   if(voiceInterval) clearInterval(voiceInterval);
   cancelAnimationFrame(waveformRAF);
   const faceStream = $('faceVideo').srcObject;

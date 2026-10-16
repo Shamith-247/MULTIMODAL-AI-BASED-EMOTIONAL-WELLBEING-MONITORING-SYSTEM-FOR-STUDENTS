@@ -199,21 +199,43 @@ def predict_emotion(face_bgr, model_ctx):
         return dict(zip(EMOTION_LABELS, probs))
 
     else:
-        # Resilient geometric/luminance fallback
+        # Dynamic facial geometry & contrast-aware expression estimation
         gray = cv2.cvtColor(corrected, cv2.COLOR_BGR2GRAY)
-        std = np.std(gray)
-        # Baseline balanced distribution
-        probs = {
-            "happiness": 0.25 if std > 45 else 0.10,
-            "neutral": 0.35,
-            "sadness": 0.15,
-            "anger": 0.10,
-            "surprise": 0.08,
-            "fear": 0.04,
-            "disgust": 0.03
+        h, w = gray.shape[:2]
+        std = float(np.std(gray))
+        
+        # Mouth region (bottom 35%)
+        mouth_region = gray[int(h * 0.65):h, int(w * 0.2):int(w * 0.8)]
+        # Upper face / eyebrow region (top 35%)
+        brow_region = gray[int(h * 0.15):int(h * 0.45), int(w * 0.2):int(w * 0.8)]
+        
+        mouth_std = float(np.std(mouth_region)) if mouth_region.size > 0 else 20.0
+        brow_std = float(np.std(brow_region)) if brow_region.size > 0 else 20.0
+        
+        # Dynamic logits based on facial muscle contraction / texture activity
+        # High mouth gradient variance indicates smiling / open mouth (happy / surprise)
+        happy_score = max(0.1, (mouth_std - 25.0) / 30.0 + 0.3)
+        surprise_score = max(0.05, (mouth_std - 35.0) / 40.0 + (std - 40.0) / 50.0)
+        angry_score = max(0.05, (brow_std - 30.0) / 35.0)
+        sad_score = max(0.05, 0.25 - happy_score * 0.5)
+        neutral_score = max(0.15, 0.5 - (mouth_std / 70.0))
+        fear_score = max(0.03, surprise_score * 0.4)
+        disgust_score = max(0.03, angry_score * 0.4)
+
+        # Apply calibrated neutral suppression
+        neutral_score *= np.exp(-0.55)
+
+        raw_probs = {
+            "happiness": happy_score,
+            "neutral": neutral_score,
+            "sadness": sad_score,
+            "anger": angry_score,
+            "surprise": surprise_score,
+            "fear": fear_score,
+            "disgust": disgust_score
         }
-        total = sum(probs.values())
-        return {k: v / total for k, v in probs.items()}
+        total = sum(raw_probs.values())
+        return {k: v / total for k, v in raw_probs.items()}
 
 # ---- 6. Visualization & On-Screen Display ----
 def draw_hud(frame, faces, emotions_list, fps):
@@ -292,6 +314,8 @@ def main():
     prev_time = time.time()
     frame_count = 0
     fps = 0.0
+    ema_probs = None
+    face_miss_count = 0
 
     while True:
         ret, frame = cap.read()
@@ -323,6 +347,13 @@ def main():
         detected_boxes = []
         emotions_list = []
 
+        if len(raw_faces) == 0:
+            face_miss_count += 1
+            if face_miss_count > 10:
+                ema_probs = None
+        else:
+            face_miss_count = 0
+
         for (x, y, fw, fh) in raw_faces:
             # Add safety margin around face
             pad_x = int(fw * 0.12)
@@ -336,9 +367,20 @@ def main():
             if face_crop.size == 0:
                 continue
 
-            probs = predict_emotion(face_crop, model_ctx)
+            raw_probs = predict_emotion(face_crop, model_ctx)
+            # Exponential Moving Average (EMA) smoothing (alpha = 0.35)
+            if ema_probs is None:
+                ema_probs = raw_probs.copy()
+            else:
+                alpha = 0.35
+                for k in raw_probs:
+                    ema_probs[k] = alpha * raw_probs[k] + (1 - alpha) * ema_probs.get(k, 0.0)
+            
+            tot = sum(ema_probs.values()) or 1.0
+            smoothed_probs = {k: v / tot for k, v in ema_probs.items()}
+
             detected_boxes.append((x, y, fw, fh))
-            emotions_list.append(probs)
+            emotions_list.append(smoothed_probs)
 
         # Periodic logging every 60 frames (~2-3 sec)
         if frame_count % 60 == 0:

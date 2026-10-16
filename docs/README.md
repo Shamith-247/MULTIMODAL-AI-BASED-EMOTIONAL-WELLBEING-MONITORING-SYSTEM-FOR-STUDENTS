@@ -18,6 +18,7 @@ This folder maintains an authoritative, end-to-end record of all architectural d
 | **[`06_FACIAL_EMOTION_AUDIT_REPORT.md`](./06_FACIAL_EMOTION_AUDIT_REPORT.md)** | **Technical Audit & Architectural Review**<br>Comprehensive 10-point audit of InceptionResnetV1, MTCNN dropout, neutral bias saturation, preprocessing divergence, and open-source model alternatives. |
 | **[`07_REALTIME_SAMPLE_EVALUATION_REPORT.md`](./07_REALTIME_SAMPLE_EVALUATION_REPORT.md)** | **Real-Time Sample Data Evaluation**<br>Empirical evaluation across authentic user webcam test photos, Action Unit analysis, raw vs. calibrated comparisons, and confusion diagnostics. |
 | **[`08_MULTIMODAL_MODEL_HUB_AND_LARGE_SCALE_TRAINING.md`](./08_MULTIMODAL_MODEL_HUB_AND_LARGE_SCALE_TRAINING.md)** | **Model Hub, Empirical Benchmarks & Large-Scale Training**<br>Decoupled `face_model/`, `text_model/`, `models/` hubs, unified multimodal testing suite (100% pass rate), native cursor restoration, and >70,000 multi-dataset FER pipeline. |
+| **[`09_REALTIME_WEBCAM_OPTIMIZATION_AND_NEUTRAL_AUDIT.md`](./09_REALTIME_WEBCAM_OPTIMIZATION_AND_NEUTRAL_AUDIT.md)** | **Real-Time Webcam Optimization & Neutral Bias Audit**<br>Decoupled 60 FPS loop, single-pass TinyFaceDetector, emotion key normalization, neutral logit suppression ($\beta = 0.55$), EMA temporal smoothing, live HUD telemetry, and 100% benchmark validation. |
 
 ---
 
