@@ -188,6 +188,31 @@ This document records the complete, step-by-step engineering journey, root-cause
   - Camera device selector dropdown for multi-camera systems and instant snapshot export.
   - Fully modular and isolated: can be toggled or removed with zero friction if requested.
 
+### 8/9.7 End-to-End Session Analytics, De-duplication & Summary Modal
+* **Temporal De-Duplication**: Integrated a strict 60ms inter-frame de-duplication filter into `runSinglePassFaceInference`, preventing duplicate burst recording and ensuring accurate session distribution statistics.
+* **"End Session" Integration**: Added dedicated "End session" triggers in both the Console Header (`#endSessionBtn`) and Live Studio Controls (`#studioEndSessionBtn`).
+* **Final Session Summary Modal (`#sessionSummaryModal`)**:
+  - **Metadata Grid**: Displays user name, formatted session duration (`Xm Ys`), total valid frames analyzed, and average inference latency.
+  - **Dominant Emotion Spotlight Card**: Showcases primary detected affect with percentage share and total frame count alongside secondary emotion badge.
+  - **7-Emotion Complete Distribution**: Visual progress bars depicting percentage and frame counts across all seven universal categories (`happy`, `neutral`, `surprise`, `sad`, `angry`, `fear`, `disgust`).
+  - **Insufficient Data Guard**: If fewer than 5 valid frames are captured, the modal displays a clear warning (`#summaryInsufficientAlert`) instructing the user to position their face in lighting, preventing spurious summaries.
+  - **Clinical Safety Disclaimer**: Explicitly states non-diagnostic educational/research status.
+  - **Export Capabilities**: 1-click JSON report download (`downloadSessionReportJSON()`) and clipboard summary export (`copySessionSummaryText()`).
+  - **Session Reinitialization**: "Start New Session" button resets collectors and restarts live tracking cleanly.
+
+### 8/9.8 Structured Diagnostic Sampling Logger & On-Screen Console
+* **Sampled Telemetry**: Structured diagnostic logger automatically fires every 30 processed frames without degrading UI frame rates:
+  - Input frame resolution (`640x480`).
+  - Face detection duration and inference latency (ms).
+  - Effective render FPS.
+  - Predicted expression label and confidence score.
+  - Side-by-side comparison of raw model logits vs calibrated EMA probabilities.
+  - Total valid collected frames count.
+* **On-Screen Diagnostic Drawer**: Real-time diagnostic console card (`#studioDiagConsole`) embedded in Face AI Studio sidebar displaying live telemetry at a glance.
+* **Automated 10-Test Verification Suite (`SignalWell/test_session_and_diagnostics.js`)**:
+  - Tests 1–10 validated programmatically (local asset serving, key normalization, de-duplication, insufficient data guard, session aggregation, secondary affect ranking, distribution conservation, diagnostic payload schema, clinical safety notice, JSON report serialization).
+  - **Result: 10 / 10 Tests Passed (100%)**.
+
 ---
 
 *This process log is maintained continuously across all project milestones.*

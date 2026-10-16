@@ -248,3 +248,92 @@ node SignalWell/test_face_inference_benchmark.js
 > 
 > SignalWell is an investigational educational and research tool. It is **not** a medical device, diagnostic instrument, or clinical assessment tool. It must never be used as a standalone indicator for clinical diagnosis, therapeutic intervention, or academic evaluation. In any research involving human participants, informed consent and ethical oversight must be strictly maintained.
 
+---
+
+## 10. End-to-End Session Summary Analytics, Insufficient Data Guard & Diagnostics
+
+### 10.1 Temporal Frame Collection & De-duplication Architecture
+To prevent burst over-counting and false statistical weighting during live camera sessions, `SignalWell` enforces inter-frame de-duplication:
+* **Sampling Window**: A minimum inter-frame timestamp delta ($\Delta t \ge 60\text{ ms}$) is enforced before recording evidence frames into the active session collection.
+* **Telemetry Collected per Frame**:
+  ```typescript
+  interface SessionFrame {
+    t: number;               // Epoch millisecond timestamp
+    emotion: string;         // Predicted 7-class label (happy, neutral, surprise, sad, angry, fear, disgust)
+    confidence: number;      // Scaled percentage [0..100]
+    probs: Record<string, number>; // Full calibrated EMA distribution
+    latency: number;         // Single-pass detection and inference latency in ms
+  }
+  ```
+
+### 10.2 Final Session Summary Report (`#sessionSummaryModal`)
+When the user clicks **"End session"** (in the console header) or **"End Session & Summary"** (in the Live Studio controls bar), the collector compiles an aggregated analytical summary:
+1. **Metadata Grid**: Displays user name, duration formatted in minutes and seconds (`Xm Ys`), total valid frames analyzed, and average inference latency.
+2. **Dominant Emotion Spotlight**: Identifies the primary affect across the session, displaying its emoji, name, percentage share, and total frame count. Also identifies and displays the secondary affect.
+3. **Complete 7-Class Distribution**: Renders animated, color-coded proportional bars for all 7 universal emotions:
+   * Happy (`#5FE39A`)
+   * Neutral (`#8A93A6`)
+   * Surprise (`#8FA377`)
+   * Sad (`#6B8AFD`)
+   * Angry (`#E06C75`)
+   * Fear (`#E5C07B`)
+   * Disgust (`#98C379`)
+4. **Insufficient Data Guard**: If fewer than 5 valid frames were captured, the modal suppresses empty statistical distributions and displays a prominent warning card (`#summaryInsufficientAlert`), preventing misleading or spurious conclusions.
+5. **Data Portability & Export**:
+   * **Download JSON**: Exports the full session object, distribution counters, metadata, safety disclaimer, and recent sampled frame history as a `.json` file.
+   * **Copy Summary**: Formats a clean textual summary for quick clipboard sharing.
+   * **Start New Session**: Safely clears session telemetry and restarts monitoring.
+
+### 10.3 Structured Diagnostic Sampling Logger
+To satisfy MLOps and reproducibility requirements without degrading UI framerates, a structured diagnostic logger fires automatically every 30 processed frames:
+* **Console Payload**:
+  ```json
+  {
+    "sampleIndex": 1,
+    "totalProcessed": 30,
+    "validCollected": 26,
+    "resolution": "640x480",
+    "detectionLatencyMs": 38,
+    "fps": 14,
+    "predicted": "HAPPY",
+    "confidence": "88%",
+    "rawLogitsProbs": { "happy": 0.720, "neutral": 0.650, ... },
+    "calibratedEMA": { "happy": 0.880, "neutral": 0.080, ... }
+  }
+  ```
+* **On-Screen Live Diagnostic Console**: The Face AI Studio sidebar displays a real-time diagnostic card (`#studioDiagConsole`) providing live feedback on engine status, frame dimensions, latency, raw-vs-calibrated neutral dampening, and latest dominant prediction.
+
+### 10.4 Automated 10-Test Verification Suite (`SignalWell/test_session_and_diagnostics.js`)
+An automated test runner was executed to rigorously validate all 10 core system requirements:
+
+```
+================================================================================
+ SIGNALWELL END-TO-END SESSION & DIAGNOSTIC VERIFICATION SUITE
+================================================================================
+  [PASS] Test 1: Local model weights served via HTTP 200
+         -> Status: 200, Manifest loaded
+  [PASS] Test 2: Expression model manifest served via HTTP 200
+         -> Status: 200
+  [PASS] Test 3: Inter-frame de-duplication correctly filters sub-60ms duplicate bursts
+         -> Processed: 4, Recorded: 2, Suppressed: 2
+  [PASS] Test 4: Insufficient data guard triggers when fewer than 5 valid frames collected
+         -> Report Status: INSUFFICIENT_DATA, Valid Frames: 3
+  [PASS] Test 5: Session aggregation computes complete analytics with correct dominant emotion
+         -> Dominant: happy (57%), Frames: 21
+  [PASS] Test 6: Secondary emotion ranked accurately after dominant affect
+         -> Secondary: surprise (24%, 5 frames)
+  [PASS] Test 7: 7-Emotion class distribution covers all categories with conservation of frames
+         -> Total frames in distribution: 21 / 21, Classes: 7
+  [PASS] Test 8: Structured diagnostic logger payload satisfies all telemetry specifications
+         -> Latency: 42ms, FPS: 14, Prediction: HAPPY
+  [PASS] Test 9: Session report embeds mandatory non-diagnostic clinical safety disclaimer
+         -> Non-diagnostic student monitoring tool. Cues reflect surface features and do not replace clinical mental health diagnostics.
+  [PASS] Test 10: JSON export serialization validates successfully with full metadata and distribution
+         -> JSON bytes: 680, User: Shamith
+
+================================================================================
+ VERIFICATION SUMMARY: 10 / 10 TESTS PASSED (100%)
+================================================================================
+```
+
+

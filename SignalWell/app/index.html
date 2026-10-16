@@ -596,6 +596,180 @@
     color: var(--mist-dim);
     margin-top: 4px;
   }
+
+  /* ===== Session Summary Modal & Diagnostics ===== */
+  .session-summary-card {
+    max-width: 600px;
+    width: 100%;
+    max-height: 88vh;
+    overflow-y: auto;
+    background: var(--fog);
+    border: 1px solid rgba(143, 163, 119, 0.45);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.7);
+  }
+  .summary-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 16px;
+  }
+  .close-modal-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--mist);
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 4px 10px;
+    border-radius: 8px;
+    line-height: 1;
+    transition: all .2s;
+  }
+  .close-modal-btn:hover {
+    color: var(--bone);
+    background: rgba(255, 255, 255, 0.12);
+  }
+  .summary-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    background: rgba(16, 20, 28, 0.7);
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    margin-bottom: 16px;
+  }
+  .sum-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .sum-lbl {
+    font-size: 0.68rem;
+    color: var(--mist);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .sum-val {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--bone);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .dominant-spotlight {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(135deg, rgba(143, 163, 119, 0.18), rgba(16, 20, 28, 0.75));
+    border: 1px solid rgba(143, 163, 119, 0.4);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+  }
+  .dom-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .dom-emoji {
+    font-size: 2.3rem;
+    line-height: 1;
+  }
+  .dom-title {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--bone);
+    letter-spacing: 0.03em;
+  }
+  .dom-sub {
+    font-size: 0.8rem;
+    color: var(--moss);
+  }
+  .dom-badge {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 0.76rem;
+    text-align: right;
+    color: var(--mist);
+  }
+  .distribution-section {
+    margin-bottom: 16px;
+  }
+  .dist-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .dist-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .dist-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.82rem;
+  }
+  .dist-name {
+    width: 100px;
+    color: var(--bone);
+    font-weight: 500;
+  }
+  .dist-track {
+    flex: 1;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+  }
+  .dist-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.4s ease;
+  }
+  .dist-pct {
+    width: 85px;
+    text-align: right;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--mist);
+  }
+  .summary-safety-notice {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    background: rgba(217, 139, 74, 0.12);
+    border: 1px solid rgba(217, 139, 74, 0.35);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 18px;
+  }
+  .summary-actions-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .summary-alert-insufficient {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    background: rgba(184, 84, 80, 0.14);
+    border: 1px solid rgba(184, 84, 80, 0.45);
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin: 16px 0;
+  }
 </style>
 </head>
 <body>
@@ -622,6 +796,102 @@
     <div class="confirm-actions">
       <button class="btn btn-ghost" id="cameraPermDismiss">Not now</button>
       <button class="btn" style="background:var(--moss); color:#fff;" id="cameraPermAllow">Allow camera</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== FINAL SESSION SUMMARY MODAL ===== -->
+<div class="confirm-overlay" id="sessionSummaryModal" style="z-index:300;">
+  <div class="confirm-card session-summary-card">
+    <div class="summary-head">
+      <div>
+        <span class="eyebrow" style="color:var(--moss);">Session Analytics</span>
+        <h3 style="color:var(--bone); font-size:1.3rem; margin:2px 0 6px 0;">Facial Emotion Session Summary</h3>
+        <p style="color:var(--mist); font-size:0.85rem; margin:0;">Comprehensive aggregate distribution across all tracked session frames.</p>
+      </div>
+      <button class="close-modal-btn" id="summaryCloseXBtn" aria-label="Close">✕</button>
+    </div>
+
+    <!-- Insufficient Data Alert Box (shown if < 5 frames) -->
+    <div id="summaryInsufficientAlert" class="summary-alert-insufficient" style="display:none;">
+      <div style="font-size:1.6rem; line-height:1;">⚠️</div>
+      <div>
+        <strong style="color:var(--bone);">Insufficient Data Collected (&lt; 5 Valid Frames)</strong>
+        <p style="margin:4px 0 0 0; font-size:0.82rem; color:var(--mist);">
+          Only <span id="summaryAlertCount" style="color:var(--flame); font-weight:700;">0</span> valid frames were recorded. A minimum of 5 face detections in good lighting is required to compile a reliable session summary. Keep your face centered in the camera and try again.
+        </p>
+      </div>
+    </div>
+
+    <!-- Sufficient Data Content -->
+    <div id="summaryContentBody">
+      <!-- Session Meta Grid -->
+      <div class="summary-meta-grid">
+        <div class="sum-stat">
+          <span class="sum-lbl">Session User</span>
+          <span class="sum-val" id="sumUser">Student</span>
+        </div>
+        <div class="sum-stat">
+          <span class="sum-lbl">Duration</span>
+          <span class="sum-val" id="sumDuration">0m 00s</span>
+        </div>
+        <div class="sum-stat">
+          <span class="sum-lbl">Valid Frames</span>
+          <span class="sum-val" id="sumFrames">0</span>
+        </div>
+        <div class="sum-stat">
+          <span class="sum-lbl">Avg Latency</span>
+          <span class="sum-val" id="sumAvgLatency">-- ms</span>
+        </div>
+      </div>
+
+      <!-- Dominant Emotion Spotlight Card -->
+      <div class="dominant-spotlight">
+        <div class="dom-left">
+          <span class="dom-emoji" id="sumDomEmoji">😐</span>
+          <div>
+            <span class="eyebrow" style="margin:0; font-size:0.68rem;">Dominant Session Affect</span>
+            <div class="dom-title" id="sumDomTitle">NEUTRAL</div>
+            <div class="dom-sub" id="sumDomSub">0% of total session time</div>
+          </div>
+        </div>
+        <div class="dom-badge" id="sumSecBadge">
+          <span>Secondary:</span>
+          <strong id="sumSecTitle" style="color:var(--bone); display:block; margin-top:2px;">--</strong>
+        </div>
+      </div>
+
+      <!-- 7-Emotion Complete Distribution Breakdown -->
+      <div class="distribution-section">
+        <div class="dist-head">
+          <span class="eyebrow" style="margin:0;">Emotion Distribution</span>
+          <span class="mono" style="font-size:0.75rem; color:var(--mist);">All 7 Expressive Categories</span>
+        </div>
+        <div class="dist-bars" id="summaryDistBars">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+
+      <!-- Clinical Non-Diagnostic Safety Notice -->
+      <div class="summary-safety-notice">
+        <div style="font-size:1.15rem; line-height:1;">🛡️</div>
+        <div style="font-size:0.78rem; color:var(--mist); line-height:1.45;">
+          <strong style="color:var(--bone);">Non-Diagnostic Educational Research Tool:</strong>
+          Facial expressions reflect transient surface-level visual features and situational dynamics, not inner emotional ground truth or clinical conditions. Always prioritize personal reflection and professional human support.
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Actions -->
+    <div class="summary-actions-bar">
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-ghost" id="summaryCopyBtn" title="Copy text summary to clipboard">📋 Copy Summary</button>
+        <button class="btn btn-ghost" id="summaryExportBtn" title="Download session telemetry as JSON">📥 Download JSON</button>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-primary" id="summaryNewSessionBtn" style="background:var(--moss); color:var(--night); font-weight:600;">Start New Session</button>
+        <button class="btn btn-ghost" id="summaryDismissBtn">Close</button>
+      </div>
     </div>
   </div>
 </div>
@@ -659,6 +929,7 @@
     <div class="session-ctl">
       <span class="session-status" id="sessionStatus"><span class="dot-live">●</span> <span id="signedInAs"></span></span>
       <button class="pause-btn" id="pauseBtn" aria-pressed="false">Pause session</button>
+      <button class="btn btn-primary" id="endSessionBtn" style="padding:4px 12px; font-size:0.78rem; background:var(--moss); border-color:var(--moss); color:var(--night); font-weight:600;">End session</button>
       <button class="cancel-btn" id="cancelBtn">Cancel session</button>
     </div>
   </div>
@@ -731,6 +1002,7 @@
           </select>
           <button class="btn btn-ghost" id="studioSnapBtn" disabled>Capture Snapshot</button>
           <button class="btn btn-ghost" id="studioResetCalibBtn">Reset Baseline</button>
+          <button class="btn" id="studioEndSessionBtn" style="background:var(--flame); border-color:var(--flame); color:var(--night); font-weight:600;">End Session &amp; Summary</button>
         </div>
 
         <!-- Sample Photo Quick Switcher -->
@@ -789,6 +1061,21 @@
             </div>
             <input type="range" id="studioDampSlider" min="0" max="2.0" step="0.05" value="0.55">
             <div class="slider-hint">Offset penalty subtracted from neutral logit ($e^{-\beta}$). 0.0 = raw model, 0.55 = calibrated default.</div>
+          </div>
+        </div>
+
+        <!-- Diagnostic Telemetry Card -->
+        <div class="studio-panel" style="margin-top:16px;">
+          <div class="panel-head">
+            <h3>Diagnostic Sampling Log</h3>
+            <span class="mono" style="font-size:0.7rem; color:var(--moss);" id="diagSampleRate">Sampled: 30 frames</span>
+          </div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:0.72rem; color:var(--mist); background:rgba(0,0,0,0.45); padding:10px 12px; border-radius:8px; line-height:1.6; border:1px solid rgba(255,255,255,0.06);" id="studioDiagConsole">
+            <div><span style="color:var(--ash);">[Engine]</span> TinyFaceDetector + Landmark68 + ExpressionNet</div>
+            <div><span style="color:var(--ash);">[Telemetry]</span> Resolution: <span id="diagRes" style="color:var(--bone);">--</span> · Latency: <span id="diagLat" style="color:var(--bone);">--</span></div>
+            <div><span style="color:var(--ash);">[Samples]</span> Valid frames: <span id="diagValidCount" style="color:var(--moss); font-weight:700;">0</span></div>
+            <div><span style="color:var(--ash);">[Calibration]</span> <span id="diagRawVsCalib" style="color:var(--mist);">Awaiting detection…</span></div>
+            <div><span style="color:var(--ash);">[Dominant]</span> <span id="diagLatestStatus" style="color:var(--moss);">Ready</span></div>
           </div>
         </div>
       </div>
@@ -1579,6 +1866,15 @@ let faceRenderFpsLastTime = performance.now();
 let faceEffectiveFps = 0;
 let faceConsecutiveMisses = 0;
 
+// Session Analytics and Diagnostic Sampling State
+let sessionActive = false;
+let sessionStartTime = null;
+let sessionFrames = []; // Collected valid predictions { t, emotion, confidence, probs, latency }
+let sessionEmotionCounts = { happy: 0, neutral: 0, surprise: 0, sad: 0, angry: 0, fear: 0, disgust: 0 };
+let lastCollectedFrameTimestamp = 0;
+let totalFramesProcessed = 0;
+let sessionLatencies = [];
+
 function faceRenderLoop(){
   if(!state.face.active) return;
   faceAnimId = requestAnimationFrame(faceRenderLoop);
@@ -2033,6 +2329,69 @@ async function runSinglePassFaceInference(video){
   faceScores.push(score);
   drawSpark('faceSpark', faceScores);
   recomputeMaster();
+
+  // 1. Session Frame Collection & De-duplication
+  const nowMs = performance.now();
+  if(!sessionStartTime) sessionStartTime = Date.now();
+  sessionActive = true;
+  totalFramesProcessed++;
+
+  if(nowMs - lastCollectedFrameTimestamp >= 60){ // De-duplication threshold (60ms)
+    lastCollectedFrameTimestamp = nowMs;
+    const topKey = topEmotion[0];
+    sessionEmotionCounts[topKey] = (sessionEmotionCounts[topKey] || 0) + 1;
+    sessionLatencies.push(faceInferenceLatencyMs);
+    sessionFrames.push({
+      t: Date.now(),
+      emotion: topKey,
+      confidence: emotionPct,
+      probs: { ...faceEmaProbs },
+      latency: faceInferenceLatencyMs
+    });
+  }
+
+  // 2. Structured Diagnostic Sampling Log (Every 30 frames)
+  if(totalFramesProcessed % 30 === 0){
+    const diagData = {
+      sampleIndex: Math.floor(totalFramesProcessed / 30),
+      totalProcessed: totalFramesProcessed,
+      validCollected: sessionFrames.length,
+      resolution: `${video.videoWidth}x${video.videoHeight}`,
+      detectionLatencyMs: faceInferenceLatencyMs,
+      fps: faceEffectiveFps,
+      predicted: emotionName,
+      confidence: emotionPct + '%',
+      rawLogitsProbs: {
+        happy: +(happyRaw).toFixed(3),
+        neutral: +(neutralRaw).toFixed(3),
+        surprise: +(surpRaw).toFixed(3),
+        sad: +(sadRaw).toFixed(3),
+        angry: +(angryRaw).toFixed(3),
+        fear: +(fearRaw).toFixed(3),
+        disgust: +(disgustRaw).toFixed(3)
+      },
+      calibratedEMA: {
+        happy: +(faceEmaProbs.happy).toFixed(3),
+        neutral: +(faceEmaProbs.neutral).toFixed(3),
+        surprise: +(faceEmaProbs.surprise).toFixed(3),
+        sad: +(faceEmaProbs.sad).toFixed(3),
+        angry: +(faceEmaProbs.angry).toFixed(3),
+        fear: +(faceEmaProbs.fear).toFixed(3),
+        disgust: +(faceEmaProbs.disgust).toFixed(3)
+      }
+    };
+    console.log('[SignalWell Structured Diagnostic #30]', diagData);
+    window.SIGNALWELL_LAST_DIAGNOSTIC = diagData;
+
+    // Update on-screen diagnostic console panel
+    const elRes = $('diagRes'), elLat = $('diagLat'), elValid = $('diagValidCount');
+    const elRawCalib = $('diagRawVsCalib'), elLatest = $('diagLatestStatus');
+    if(elRes) elRes.textContent = `${video.videoWidth}x${video.videoHeight}`;
+    if(elLat) elLat.textContent = `${faceInferenceLatencyMs}ms (${faceEffectiveFps} FPS)`;
+    if(elValid) elValid.textContent = sessionFrames.length;
+    if(elRawCalib) elRawCalib.textContent = `Raw Neu: ${(diagData.rawLogitsProbs.neutral*100).toFixed(0)}% → Calib: ${(diagData.calibratedEMA.neutral*100).toFixed(0)}%`;
+    if(elLatest) elLatest.textContent = `${emotionEmoji} ${emotionName} (${emotionPct}%)`;
+  }
 }
 
 /* ---------------- VOICE CHANNEL ---------------- */
@@ -2567,7 +2926,198 @@ $('cancelConfirmBtn').addEventListener('click', () => {
   $('gateConsent').checked = false;
   $('gateError').style.display = 'none';
   currentUser = null;
+  // Reset session analytics
+  sessionFrames = [];
+  sessionEmotionCounts = { happy: 0, neutral: 0, surprise: 0, sad: 0, angry: 0, fear: 0, disgust: 0 };
+  sessionLatencies = [];
+  sessionStartTime = null;
+  sessionActive = false;
+  totalFramesProcessed = 0;
 });
+
+/* ---------------- FINAL SESSION SUMMARY & ANALYTICS ---------------- */
+function endSessionAndGenerateSummary(){
+  sessionActive = false;
+  const modal = $('sessionSummaryModal');
+  if(!modal) return;
+
+  const validCount = sessionFrames.length;
+  const alertEl = $('summaryInsufficientAlert');
+  const bodyEl = $('summaryContentBody');
+
+  if(validCount < 5){
+    if(alertEl) alertEl.style.display = 'flex';
+    if(bodyEl) bodyEl.style.display = 'none';
+    const countSpan = $('summaryAlertCount');
+    if(countSpan) countSpan.textContent = validCount;
+    modal.classList.add('show');
+    return;
+  }
+
+  if(alertEl) alertEl.style.display = 'none';
+  if(bodyEl) bodyEl.style.display = 'block';
+
+  const durationMs = Date.now() - (sessionStartTime || Date.now());
+  const durationSecs = Math.max(1, Math.round(durationMs / 1000));
+  const m = Math.floor(durationSecs / 60);
+  const s = durationSecs % 60;
+  const durationFormatted = `${m}m ${s < 10 ? '0' : ''}${s}s`;
+
+  if($('sumUser')) $('sumUser').textContent = currentUser || 'Student';
+  if($('sumDuration')) $('sumDuration').textContent = durationFormatted;
+  if($('sumFrames')) $('sumFrames').textContent = validCount;
+
+  const avgLat = sessionLatencies.length
+    ? Math.round(sessionLatencies.reduce((a,b)=>a+b, 0) / sessionLatencies.length)
+    : 0;
+  if($('sumAvgLatency')) $('sumAvgLatency').textContent = avgLat + ' ms';
+
+  // Compute breakdown %
+  const emotions = ['happy', 'neutral', 'surprise', 'sad', 'angry', 'fear', 'disgust'];
+  const emotionEmojis = {
+    happy: '😊', neutral: '😐', surprise: '😮', sad: '😢',
+    angry: '😠', fear: '😨', disgust: '🤢'
+  };
+  const emotionColors = {
+    happy: '#5FE39A', neutral: '#8A93A6', surprise: '#8FA377', sad: '#6B8AFD',
+    angry: '#E06C75', fear: '#E5C07B', disgust: '#98C379'
+  };
+
+  const emotionStats = emotions.map(k => {
+    const count = sessionEmotionCounts[k] || 0;
+    const pct = Math.round((count / validCount) * 100);
+    return { emotion: k, count, pct, emoji: emotionEmojis[k], color: emotionColors[k] };
+  }).sort((a,b) => b.count - a.count);
+
+  const dominant = emotionStats[0];
+  const secondary = emotionStats[1];
+
+  if($('sumDomEmoji')) $('sumDomEmoji').textContent = dominant.emoji;
+  if($('sumDomTitle')) $('sumDomTitle').textContent = dominant.emotion.toUpperCase();
+  if($('sumDomSub')) $('sumDomSub').textContent = `${dominant.pct}% of session frames (${dominant.count} of ${validCount} frames)`;
+
+  if($('sumSecTitle')) $('sumSecTitle').textContent = `${secondary.emoji} ${secondary.emotion.charAt(0).toUpperCase() + secondary.emotion.slice(1)} (${secondary.pct}%)`;
+
+  // Render distribution bars
+  const distContainer = $('summaryDistBars');
+  if(distContainer){
+    distContainer.innerHTML = '';
+    emotionStats.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'dist-row';
+      row.innerHTML = `
+        <div class="dist-name">${item.emoji} ${item.emotion.charAt(0).toUpperCase() + item.emotion.slice(1)}</div>
+        <div class="dist-track">
+          <div class="dist-fill" style="width:${item.pct}%; background:${item.color};"></div>
+        </div>
+        <div class="dist-pct">${item.pct}% <span style="font-size:0.68rem; color:var(--ash);">(${item.count})</span></div>
+      `;
+      distContainer.appendChild(row);
+    });
+  }
+
+  modal.classList.add('show');
+}
+
+function downloadSessionReportJSON(){
+  const durationMs = Date.now() - (sessionStartTime || Date.now());
+  const durationSecs = Math.max(1, Math.round(durationMs / 1000));
+  const validCount = sessionFrames.length;
+
+  const report = {
+    project: 'SignalWell Multimodal Monitoring System',
+    reportType: 'Facial Emotion Recognition Session Report',
+    exportTimestamp: new Date().toISOString(),
+    sessionMetadata: {
+      user: currentUser || 'Student',
+      startTime: sessionStartTime ? new Date(sessionStartTime).toISOString() : null,
+      durationSeconds: durationSecs,
+      totalValidFrames: validCount,
+      averageLatencyMs: sessionLatencies.length ? Math.round(sessionLatencies.reduce((a,b)=>a+b, 0) / sessionLatencies.length) : 0,
+    },
+    emotionDistribution: {
+      totalFrames: validCount,
+      counts: { ...sessionEmotionCounts },
+      percentages: Object.fromEntries(
+        Object.entries(sessionEmotionCounts).map(([k, count]) => [k, validCount ? Math.round((count / validCount) * 100) : 0])
+      )
+    },
+    safetyDisclaimer: 'Non-diagnostic student monitoring tool. Cues reflect surface features and do not replace clinical mental health diagnostics.',
+    recentSampledFrames: sessionFrames.slice(-50)
+  };
+
+  const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `signalwell_session_${(currentUser||'student').toLowerCase()}_${Date.now()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function copySessionSummaryText(){
+  const validCount = sessionFrames.length;
+  const durationMs = Date.now() - (sessionStartTime || Date.now());
+  const durationSecs = Math.max(1, Math.round(durationMs / 1000));
+  const m = Math.floor(durationSecs / 60);
+  const s = durationSecs % 60;
+
+  const sorted = Object.entries(sessionEmotionCounts).sort((a,b)=>b[1]-a[1]);
+  const breakdownStr = sorted.map(([k, c]) => `  - ${k.toUpperCase()}: ${validCount ? Math.round((c/validCount)*100) : 0}% (${c} frames)`).join('\n');
+
+  const text = `=== SIGNALWELL SESSION REPORT ===\nUser: ${currentUser || 'Student'}\nDuration: ${m}m ${s}s\nValid Frames: ${validCount}\nDominant Emotion: ${sorted[0] ? sorted[0][0].toUpperCase() : 'N/A'} (${validCount && sorted[0] ? Math.round((sorted[0][1]/validCount)*100) : 0}%)\nDistribution:\n${breakdownStr}\nClinical Disclaimer: Exploratory educational monitoring prototype, not a psychiatric diagnostic tool.`;
+
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = $('summaryCopyBtn');
+    if(btn){
+      const orig = btn.textContent;
+      btn.textContent = '✓ Copied!';
+      setTimeout(() => { btn.textContent = orig; }, 2000);
+    }
+  }).catch(() => {});
+}
+
+function startNewSessionFromSummary(){
+  $('sessionSummaryModal').classList.remove('show');
+  sessionFrames = [];
+  sessionEmotionCounts = { happy: 0, neutral: 0, surprise: 0, sad: 0, angry: 0, fear: 0, disgust: 0 };
+  sessionLatencies = [];
+  totalFramesProcessed = 0;
+  sessionStartTime = Date.now();
+  sessionActive = true;
+  if(state.face.active && !faceAnimId){
+    faceRenderLoop();
+  }
+}
+
+// Attach Event Listeners
+const endSessionBtn = $('endSessionBtn');
+if(endSessionBtn) endSessionBtn.addEventListener('click', endSessionAndGenerateSummary);
+
+const studioEndSessionBtn = $('studioEndSessionBtn');
+if(studioEndSessionBtn) studioEndSessionBtn.addEventListener('click', endSessionAndGenerateSummary);
+
+const summaryCloseXBtn = $('summaryCloseXBtn');
+if(summaryCloseXBtn) summaryCloseXBtn.addEventListener('click', () => { $('sessionSummaryModal').classList.remove('show'); });
+
+const summaryDismissBtn = $('summaryDismissBtn');
+if(summaryDismissBtn) summaryDismissBtn.addEventListener('click', () => { $('sessionSummaryModal').classList.remove('show'); });
+
+const summaryModalEl = $('sessionSummaryModal');
+if(summaryModalEl) summaryModalEl.addEventListener('click', (e) => {
+  if(e.target === summaryModalEl) summaryModalEl.classList.remove('show');
+});
+
+const summaryExportBtn = $('summaryExportBtn');
+if(summaryExportBtn) summaryExportBtn.addEventListener('click', downloadSessionReportJSON);
+
+const summaryCopyBtn = $('summaryCopyBtn');
+if(summaryCopyBtn) summaryCopyBtn.addEventListener('click', copySessionSummaryText);
+
+const summaryNewSessionBtn = $('summaryNewSessionBtn');
+if(summaryNewSessionBtn) summaryNewSessionBtn.addEventListener('click', startNewSessionFromSummary);
 
 /* init */
 recomputeMaster();
