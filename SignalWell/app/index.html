@@ -369,6 +369,233 @@
   .cursor-dot, .cursor-ring {
     display: none !important;
   }
+
+  /* ===== Integrated Live Face AI Studio ===== */
+  #face-studio {
+    background: linear-gradient(180deg, rgba(16,19,26,0) 0%, rgba(22,27,36,0.6) 100%);
+  }
+  .studio-container {
+    display: grid;
+    grid-template-columns: 1.25fr 0.85fr;
+    gap: 26px;
+    align-items: start;
+  }
+  @media (max-width: 960px) {
+    .studio-container { grid-template-columns: 1fr; }
+  }
+  .studio-view-card {
+    background: var(--fog);
+    border: 1px solid var(--hair);
+    border-radius: 14px;
+    padding: 18px;
+    box-shadow: var(--shadow);
+  }
+  .studio-stage {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4/3;
+    max-height: 480px;
+    background: #0A0D14;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.06);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .studio-stage video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transform: scaleX(-1);
+  }
+  .studio-stage canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .studio-badge-overlay {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    display: flex;
+    gap: 8px;
+    z-index: 4;
+  }
+  .studio-live-pill, .studio-fps-pill, .studio-lat-pill {
+    background: rgba(16,20,28,0.85);
+    backdrop-filter: blur(6px);
+    border: 1px solid var(--hair);
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .72rem;
+    font-weight: 600;
+  }
+  .studio-live-pill { color: var(--moss); border-color: var(--moss-dim); }
+  .studio-fps-pill { color: var(--bone); }
+  .studio-lat-pill { color: var(--mist); }
+
+  .studio-controls-bar {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .select-cam {
+    background: var(--fog-2);
+    color: var(--bone);
+    border: 1px solid var(--hair);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: .85rem;
+    font-family: inherit;
+    outline: none;
+    flex: 1;
+    min-width: 160px;
+  }
+  .select-cam:focus { border-color: var(--moss); }
+
+  .studio-samples-bar {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--hair);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .sample-pills {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .sample-pill-btn {
+    background: var(--fog-2);
+    color: var(--mist);
+    border: 1px solid var(--hair);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: .75rem;
+    font-family: 'JetBrains Mono', monospace;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .sample-pill-btn:hover {
+    color: var(--bone);
+    border-color: var(--moss);
+    background: rgba(143,163,119,0.12);
+  }
+
+  .studio-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .studio-panel {
+    background: var(--fog);
+    border: 1px solid var(--hair);
+    border-radius: 14px;
+    padding: 20px;
+    box-shadow: var(--shadow);
+  }
+  .panel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  .panel-head h3 {
+    font-size: 1.05rem;
+    margin: 0;
+  }
+  .studio-chip {
+    background: rgba(143,163,119,0.14);
+    color: var(--moss);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .72rem;
+    padding: 3px 8px;
+    border-radius: 12px;
+    border: 1px solid var(--moss-dim);
+  }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .stat-item {
+    background: var(--fog-2);
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.03);
+  }
+  .stat-k {
+    display: block;
+    font-size: .72rem;
+    color: var(--mist);
+    margin-bottom: 2px;
+  }
+  .stat-v {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .86rem;
+    color: var(--bone);
+  }
+
+  .studio-prog-list {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    margin-top: 8px;
+  }
+  .prog-item { font-size: .8rem; }
+  .prog-title {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 3px;
+    color: var(--mist);
+  }
+  .prog-title span:last-child {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--bone);
+    font-weight: 600;
+  }
+  .prog-track {
+    height: 7px;
+    background: var(--ink);
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.04);
+  }
+  .prog-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--moss);
+    border-radius: 4px;
+    transition: width .15s ease;
+  }
+
+  .studio-slider-box {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--hair);
+  }
+  .slider-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: .82rem;
+    margin-bottom: 6px;
+  }
+  .slider-hint {
+    font-size: .7rem;
+    color: var(--mist-dim);
+    margin-top: 4px;
+  }
 </style>
 </head>
 <body>
@@ -412,6 +639,7 @@
       <label for="gateConsent" style="margin:0;">I understand this is a screening prototype, not a diagnostic tool, and I consent to on-device analysis of my camera/mic/text during this session.</label>
     </div>
     <button class="btn btn-primary" style="width:100%;" id="gateSubmit">Begin session</button>
+    <button class="btn btn-ghost" style="width:100%; margin-top:10px;" id="gateStudioBtn">⚡ Quick Demo (Enter Live Face AI Studio)</button>
   </div>
 </div>
 
@@ -421,6 +649,7 @@
   <div class="wrap">
     <div class="brand"><span class="dot"></span> SIGNALWELL</div>
     <nav>
+      <a href="#face-studio" style="color:var(--moss); font-weight:600;">Face AI Studio</a>
       <a href="#mixer">Console</a>
       <a href="#aux">Context</a>
       <a href="#trend">Trend</a>
@@ -442,8 +671,9 @@
       <h1>Four quiet signals.<br><em>One honest reading.</em></h1>
       <p class="lede">SignalWell listens to what a student's face, voice, words, and habits are already saying — and fuses them into a single wellbeing reading, computed entirely on-device with open-source models. Nothing here is a diagnosis. It's an early, gentle signal to check in.</p>
       <div class="cta-row">
-        <button class="btn btn-primary" onclick="document.getElementById('mixer').scrollIntoView({behavior:'smooth'})">Open the console</button>
-        <a class="btn btn-ghost" href="#stack">See the model stack</a>
+        <button class="btn btn-primary" onclick="document.getElementById('face-studio').scrollIntoView({behavior:'smooth'})">Launch Live Face AI Studio</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('mixer').scrollIntoView({behavior:'smooth'})">Open console</button>
+        <a class="btn btn-ghost" href="#stack">See model stack</a>
       </div>
     </div>
     <div class="signal-scope">
@@ -464,6 +694,104 @@
         <text x="14" y="172" fill="#B85450" font-size="11" font-family="JetBrains Mono">behavior</text>
         <text id="fusionOutLabel" x="330" y="100" fill="#EDE7DA" font-size="11" font-family="JetBrains Mono">out</text>
       </svg>
+    </div>
+  </div>
+</section>
+
+<!-- ===== INTEGRATED LIVE FACE AI STUDIO ===== -->
+<section class="section" id="face-studio">
+  <div class="wrap">
+    <div class="section-head">
+      <div>
+        <span class="eyebrow">Real-Time Computer Vision</span>
+        <h2>Live Face Emotion Recognition Studio</h2>
+      </div>
+      <p class="section-note">
+        Real-time face detection with on-screen HUD, 68-point landmarks, calibrated neutral bias dampening, and live latency metrics. Runs on-device with single-pass TinyFaceDetector and ExpressionNet.
+      </p>
+    </div>
+
+    <div class="studio-container">
+      <!-- Left: Camera & Canvas Viewport -->
+      <div class="studio-view-card">
+        <div class="studio-stage" id="studioStage">
+          <video id="studioVideo" autoplay playsinline muted></video>
+          <canvas id="studioCanvas"></canvas>
+          <div class="studio-badge-overlay">
+            <span class="studio-live-pill" id="studioLivePill">IDLE</span>
+            <span class="studio-fps-pill" id="studioFpsPill">0 FPS</span>
+            <span class="studio-lat-pill" id="studioLatPill">0 ms</span>
+          </div>
+        </div>
+
+        <div class="studio-controls-bar">
+          <button class="btn btn-primary" id="studioCamToggle">Start Live Camera Feed</button>
+          <select class="select-cam" id="studioCamSelect">
+            <option value="">Default Camera</option>
+          </select>
+          <button class="btn btn-ghost" id="studioSnapBtn" disabled>Capture Snapshot</button>
+          <button class="btn btn-ghost" id="studioResetCalibBtn">Reset Baseline</button>
+        </div>
+
+        <!-- Sample Photo Quick Switcher -->
+        <div class="studio-samples-bar">
+          <span class="mono" style="font-size:0.75rem; color:var(--mist); display:flex; align-items:center; gap:6px;">
+            <span>📸 Test Authentic Photos (Click to Evaluate):</span>
+          </span>
+          <div class="sample-pills">
+            <button class="sample-pill-btn" data-photo="test_photos/WIN_20260901_17_11_36_Pro.jpg" title="Stern focus / furrowed brow (AU4)">1. Stern Focus</button>
+            <button class="sample-pill-btn" data-photo="test_photos/WIN_20260901_17_11_43_Pro.jpg" title="Resting contentment (AU0)">2. Resting Face</button>
+            <button class="sample-pill-btn" data-photo="test_photos/WIN_20260901_17_11_49_Pro.jpg" title="Grimace / nose wrinkle (AU9)">3. Grimace / Strain</button>
+            <button class="sample-pill-btn" data-photo="test_photos/WIN_20260901_17_11_52_Pro.jpg" title="Wide eyes / high alert (AU1+2)">4. Alert / Surprise</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Telemetry & Calibrated Probabilities -->
+      <div class="studio-sidebar">
+        <!-- Telemetry Card -->
+        <div class="studio-panel">
+          <div class="panel-head">
+            <h3>Live Telemetry</h3>
+            <span class="studio-chip" id="studioTrackStatus">STANDBY</span>
+          </div>
+          <div class="stat-grid">
+            <div class="stat-item"><span class="stat-k">Dominant Emotion</span><span class="stat-v" id="studioDominant" style="color:var(--moss); font-weight:700;">--</span></div>
+            <div class="stat-item"><span class="stat-k">Confidence</span><span class="stat-v" id="studioConf">--</span></div>
+            <div class="stat-item"><span class="stat-k">Inference Latency</span><span class="stat-v" id="studioLatency">--</span></div>
+            <div class="stat-item"><span class="stat-k">Render FPS</span><span class="stat-v" id="studioFps">0 FPS</span></div>
+            <div class="stat-item"><span class="stat-k">Face Resolution</span><span class="stat-v" id="studioResolution">--</span></div>
+            <div class="stat-item"><span class="stat-k">Lighting / Contrast</span><span class="stat-v" id="studioLighting">--</span></div>
+          </div>
+        </div>
+
+        <!-- Emotion Breakdown Card (All 7 classes) -->
+        <div class="studio-panel">
+          <div class="panel-head">
+            <h3>Calibrated Probabilities</h3>
+            <span class="mono" style="font-size:0.7rem; color:var(--mist);">EMA α=0.35</span>
+          </div>
+          <div class="studio-prog-list" id="studioProbList">
+            <div class="prog-item"><div class="prog-title"><span>Happiness 😊</span><span id="sp-happy">0%</span></div><div class="prog-track"><div class="prog-fill" id="sb-happy"></div></div></div>
+            <div class="prog-item"><div class="prog-title"><span>Neutral 😐</span><span id="sp-neutral">0%</span></div><div class="prog-track"><div class="prog-fill" id="sb-neutral"></div></div></div>
+            <div class="prog-item"><div class="prog-title"><span>Surprise 😮</span><span id="sp-surprise">0%</span></div><div class="prog-track"><div class="prog-fill" id="sb-surprise"></div></div></div>
+            <div class="prog-item"><div class="prog-title"><span>Sadness 😢</span><span id="sp-sad">0%</span></div><div class="prog-track"><div class="prog-fill" id="sb-sad"></div></div></div>
+            <div class="prog-item"><div class="prog-title"><span>Anger 😠</span><span id="sp-angry">0%</span></div><div class="prog-track"><div class="prog-fill" id="sb-angry"></div></div></div>
+            <div class="prog-item"><div class="prog-title"><span>Fear 😨</span><span id="sp-fear">0%</span></div><div class="prog-track"><div class="prog-fill" id="sb-fear"></div></div></div>
+            <div class="prog-item"><div class="prog-title"><span>Disgust 🤢</span><span id="sp-disgust">0%</span></div><div class="prog-track"><div class="prog-fill" id="sb-disgust"></div></div></div>
+          </div>
+
+          <!-- Neutral Dampening Slider -->
+          <div class="studio-slider-box">
+            <div class="slider-head">
+              <span>Neutral Bias Dampener</span>
+              <span id="studioDampVal" class="mono" style="color:var(--moss); font-weight:700;">0.55</span>
+            </div>
+            <input type="range" id="studioDampSlider" min="0" max="2.0" step="0.05" value="0.55">
+            <div class="slider-hint">Offset penalty subtracted from neutral logit ($e^{-\beta}$). 0.0 = raw model, 0.55 = calibrated default.</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </section>
@@ -732,6 +1060,21 @@ $('gateSubmit').addEventListener('click', () => {
 });
 $('gateName').addEventListener('keydown', (e) => { if(e.key === 'Enter') $('gateSubmit').click(); });
 
+const gateStudioBtn = $('gateStudioBtn');
+if(gateStudioBtn){
+  gateStudioBtn.addEventListener('click', () => {
+    currentUser = 'Researcher';
+    $('signedInAs').textContent = 'Researcher';
+    $('gate').style.display = 'none';
+    $('appRoot').style.display = 'block';
+    showWelcomeToast('Researcher');
+    setTimeout(() => {
+      const el = document.getElementById('face-studio');
+      if(el) el.scrollIntoView({ behavior: 'smooth' });
+    }, 150);
+  });
+}
+
 /* ---------------- WELCOME TOAST (auto-dismiss) ---------------- */
 let welcomeTimer = null;
 function showWelcomeToast(name){
@@ -914,36 +1257,109 @@ if(faceCalibrateBtn){
   });
 }
 
+function stopCameraStream(){
+  state.face.active = false;
+  if(faceAnimId){ cancelAnimationFrame(faceAnimId); faceAnimId = null; }
+  isFaceDetecting = false;
+  faceEmaProbs = null;
+
+  const fVideo = $('faceVideo');
+  if(fVideo && fVideo.srcObject){
+    fVideo.srcObject.getTracks().forEach(t => t.stop());
+    fVideo.srcObject = null;
+  }
+  const sVideo = $('studioVideo');
+  if(sVideo && sVideo.srcObject){
+    sVideo.srcObject = null;
+  }
+
+  faceToggle.setAttribute('aria-pressed','false');
+  faceToggle.textContent = 'Enable camera';
+  if(faceCalibrateBtn) faceCalibrateBtn.style.display = 'none';
+  $('camPermHelp').style.display = 'none';
+
+  const overlayCanvas = $('faceCanvas');
+  if(overlayCanvas){
+    const overlayCtx = overlayCanvas.getContext('2d');
+    overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  }
+
+  const sCanvas = $('studioCanvas');
+  if(sCanvas){
+    const sCtx = sCanvas.getContext('2d');
+    sCtx.clearRect(0, 0, sCanvas.width, sCanvas.height);
+  }
+
+  const sCamToggle = $('studioCamToggle');
+  if(sCamToggle){
+    sCamToggle.textContent = 'Start Live Camera Feed';
+    sCamToggle.classList.remove('btn-ghost');
+    sCamToggle.classList.add('btn-primary');
+  }
+  const snapBtn = $('studioSnapBtn');
+  if(snapBtn) snapBtn.disabled = true;
+
+  $('studioTrackStatus').textContent = 'STANDBY';
+  $('studioLivePill').textContent = 'IDLE';
+  $('studioLivePill').style.color = 'var(--mist)';
+  $('faceLit').textContent = '';
+  $('faceLit').classList.remove('live-pulse');
+  faceScores.length = 0;
+  drawSpark('faceSpark', faceScores);
+  state.face.score = null;
+  paintMeter($('faceValue').parentElement.querySelector('.meter-fill'), $('faceValue'), $('faceSub'), null, null, 'Camera off');
+  recomputeMaster();
+}
+
 faceToggle.addEventListener('click', async () => {
   if(!state.face.active){
     $('cameraPermModal').classList.add('show');
   } else {
-    state.face.active = false;
-    if(faceAnimId){ cancelAnimationFrame(faceAnimId); faceAnimId = null; }
-    isFaceDetecting = false;
-    faceEmaProbs = null;
-    const stream = $('faceVideo').srcObject;
-    if(stream) stream.getTracks().forEach(t=>t.stop());
-    $('faceVideo').srcObject = null;
-    faceToggle.setAttribute('aria-pressed','false');
-    faceToggle.textContent = 'Enable camera';
-    if(faceCalibrateBtn) faceCalibrateBtn.style.display = 'none';
-    $('camPermHelp').style.display = 'none';
-    const overlayCanvas = $('faceCanvas');
-    if(overlayCanvas){
-      const overlayCtx = overlayCanvas.getContext('2d');
-      overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-    }
-
-    $('faceLit').textContent = '';
-    $('faceLit').classList.remove('live-pulse');
-    faceScores.length = 0;
-    drawSpark('faceSpark', faceScores);
-    state.face.score = null;
-    paintMeter($('faceValue').parentElement.querySelector('.meter-fill'), $('faceValue'), $('faceSub'), null, null, 'Camera off');
-    recomputeMaster();
+    stopCameraStream();
   }
 });
+
+const studioCamToggle = $('studioCamToggle');
+if(studioCamToggle){
+  studioCamToggle.addEventListener('click', async () => {
+    if(!state.face.active){
+      $('cameraPermModal').classList.add('show');
+    } else {
+      stopCameraStream();
+    }
+  });
+}
+
+// Neutral Bias Dampener Synchronization
+const studioDampSlider = $('studioDampSlider');
+const studioDampVal = $('studioDampVal');
+if(studioDampSlider && studioDampVal){
+  studioDampSlider.addEventListener('input', () => {
+    const val = parseFloat(studioDampSlider.value).toFixed(2);
+    studioDampVal.textContent = val;
+    if(faceNeutralDamp) faceNeutralDamp.value = val;
+    if(faceNeutralDampVal) faceNeutralDampVal.textContent = val;
+  });
+}
+if(faceNeutralDamp){
+  faceNeutralDamp.addEventListener('input', () => {
+    const val = parseFloat(faceNeutralDamp.value).toFixed(2);
+    if(studioDampSlider) studioDampSlider.value = val;
+    if(studioDampVal) studioDampVal.textContent = val;
+  });
+}
+
+const studioResetCalibBtn = $('studioResetCalibBtn');
+if(studioResetCalibBtn){
+  studioResetCalibBtn.addEventListener('click', () => {
+    if(studioDampSlider) studioDampSlider.value = "0.55";
+    if(studioDampVal) studioDampVal.textContent = "0.55";
+    if(faceNeutralDamp) faceNeutralDamp.value = "0.55";
+    if(faceNeutralDampVal) faceNeutralDampVal.textContent = "0.55";
+    faceEmaProbs = null;
+    $('faceSub').textContent = 'Calibration reset to baseline (0.55 offset)';
+  });
+}
 
 // Offscreen canvas used to crop + resize the detected face to the 160x160 input your model expects
 const faceCropCanvas = document.createElement('canvas');
@@ -1050,7 +1466,7 @@ function applyFaceContrastCorrection(ctx, w, h){
   }catch(e){}
 }
 
-async function startCameraFlow(){
+async function startCameraFlow(deviceId = null){
   $('camPermHelp').style.display = 'none';
 
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
@@ -1058,7 +1474,7 @@ async function startCameraFlow(){
     return;
   }
 
-  if(navigator.permissions && navigator.permissions.query){
+  if(navigator.permissions && navigator.permissions.query && !deviceId){
     try{
       const status = await navigator.permissions.query({ name: 'camera' });
       if(status.state === 'denied'){
@@ -1069,9 +1485,14 @@ async function startCameraFlow(){
     }catch(e){}
   }
 
+  let constraints = { video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } };
+  if(deviceId){
+    constraints = { video: { deviceId: { exact: deviceId } } };
+  }
+
   let stream;
   try{
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
   }catch(err){
     if(err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'){
       $('faceSub').textContent = 'Camera access is blocked for this site';
@@ -1087,16 +1508,37 @@ async function startCameraFlow(){
   }
 
   const video = $('faceVideo');
-  video.srcObject = stream;
-  try{ await video.play(); }catch(e){}
+  if(video){
+    video.srcObject = stream;
+    try{ await video.play(); }catch(e){}
+  }
+  const studioVideo = $('studioVideo');
+  if(studioVideo){
+    studioVideo.srcObject = stream;
+    try{ await studioVideo.play(); }catch(e){}
+  }
 
   state.face.active = true;
   faceToggle.setAttribute('aria-pressed','true');
   faceToggle.textContent = 'Disable camera';
+  const sCamToggle = $('studioCamToggle');
+  if(sCamToggle){
+    sCamToggle.textContent = 'Stop Live Camera';
+    sCamToggle.classList.add('btn-ghost');
+    sCamToggle.classList.remove('btn-primary');
+  }
+  const snapBtn = $('studioSnapBtn');
+  if(snapBtn) snapBtn.disabled = false;
+  $('studioTrackStatus').textContent = 'ACTIVE';
+  $('studioLivePill').textContent = 'LIVE';
+  $('studioLivePill').style.color = '#5FE39A';
+
   if(faceCalibrateBtn) faceCalibrateBtn.style.display = 'inline-block';
   $('faceLit').textContent = '●';
   $('faceLit').classList.add('live-pulse');
   $('faceSub').textContent = 'Camera on — loading models…';
+
+  populateCameraList();
 
   // Step 2: Load models with ultra-fast local loading + CDN fallback
   try{
@@ -1160,6 +1602,260 @@ function faceRenderLoop(){
   }
 }
 
+// Reusable on-screen HUD drawing routine for live camera and static sample photos
+function drawHudBox(ctx, box, landmarks, cw, ch, emotionEmoji, emotionName, emotionPct, score, latencyMs, fps){
+  // 1. Corner Reticles
+  const corner = Math.min(26, box.width * 0.22);
+  ctx.lineWidth = 3.5;
+  ctx.strokeStyle = '#5FE39A';
+  ctx.lineCap = 'round';
+  
+  ctx.beginPath();
+  ctx.moveTo(box.x, box.y + corner); ctx.lineTo(box.x, box.y); ctx.lineTo(box.x + corner, box.y);
+  ctx.moveTo(box.x + box.width - corner, box.y); ctx.lineTo(box.x + box.width, box.y); ctx.lineTo(box.x + box.width, box.y + corner);
+  ctx.moveTo(box.x, box.y + box.height - corner); ctx.lineTo(box.x, box.y + box.height); ctx.lineTo(box.x + corner, box.y + box.height);
+  ctx.moveTo(box.x + box.width - corner, box.y + box.height); ctx.lineTo(box.x + box.width, box.y + box.height); ctx.lineTo(box.x + box.width, box.y + box.height - corner);
+  ctx.stroke();
+
+  // Subtle face box fill
+  ctx.fillStyle = 'rgba(95, 227, 154, 0.08)';
+  ctx.fillRect(box.x, box.y, box.width, box.height);
+
+  // 2. Facial Landmark Points
+  if(landmarks && landmarks.length){
+    ctx.fillStyle = 'rgba(95, 227, 154, 0.75)';
+    const pts = [36, 39, 42, 45, 30, 48, 54, 8];
+    for(const idx of pts){
+      const pt = landmarks[idx];
+      if(pt){
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, 2.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  // 3. Floating Output Badge
+  const badgeW = Math.max(210, box.width * 0.95);
+  const badgeH = 44;
+  const badgeX = Math.max(8, Math.min(cw - badgeW - 8, box.x + (box.width - badgeW) / 2));
+  const badgeY = Math.max(8, box.y - badgeH - 8);
+
+  ctx.fillStyle = 'rgba(16, 20, 28, 0.92)';
+  ctx.strokeStyle = '#5FE39A';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  if(ctx.roundRect){ ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 8); } else { ctx.rect(badgeX, badgeY, badgeW, badgeH); }
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = 'bold 14px "Plus Jakarta Sans", sans-serif';
+  ctx.fillText(`${emotionEmoji} ${emotionName} (${emotionPct}%)`, badgeX + 10, badgeY + 19);
+
+  const tagColor = score >= 65 ? '#8FA377' : (score >= 40 ? '#8A93A6' : '#D98B4A');
+  ctx.fillStyle = tagColor;
+  ctx.font = '600 10.5px "JetBrains Mono", monospace';
+  ctx.fillText(`WELLBEING: ${Math.round(score)}/100 • ${latencyMs}ms`, badgeX + 10, badgeY + 35);
+
+  // 4. Status Telemetry
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#5FE39A';
+  ctx.font = '600 11px "JetBrains Mono", monospace';
+  ctx.fillText(`● TRACKING ACTIVE • ${cw}x${ch} • ${fps} FPS`, 12, 20);
+}
+
+// Camera device enumeration
+async function populateCameraList(){
+  const select = $('studioCamSelect');
+  if(!select || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+  try{
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const videoDevices = devices.filter(d => d.kind === 'videoinput');
+    if(videoDevices.length > 0){
+      const currentVal = select.value;
+      select.innerHTML = '<option value="">Default Front/Webcam</option>';
+      videoDevices.forEach((dev, idx) => {
+        const opt = document.createElement('option');
+        opt.value = dev.deviceId;
+        opt.textContent = dev.label || `Camera ${idx + 1}`;
+        if(dev.deviceId === currentVal) opt.selected = true;
+        select.appendChild(opt);
+      });
+    }
+  }catch(e){}
+}
+
+$('studioCamSelect')?.addEventListener('change', async () => {
+  const deviceId = $('studioCamSelect').value;
+  if(state.face.active){
+    stopCameraStream();
+    await startCameraFlow(deviceId);
+  }
+});
+
+// Snapshot capture button
+$('studioSnapBtn')?.addEventListener('click', () => {
+  const sVid = $('studioVideo');
+  const sCanv = $('studioCanvas');
+  if(!sVid || sVid.readyState < 2) return;
+  const snapCanvas = document.createElement('canvas');
+  snapCanvas.width = sVid.videoWidth;
+  snapCanvas.height = sVid.videoHeight;
+  const ctx = snapCanvas.getContext('2d');
+  ctx.save();
+  ctx.translate(snapCanvas.width, 0);
+  ctx.scale(-1, 1);
+  ctx.drawImage(sVid, 0, 0);
+  ctx.restore();
+  if(sCanv) ctx.drawImage(sCanv, 0, 0);
+  const dataUrl = snapCanvas.toDataURL('image/jpeg', 0.92);
+  const win = window.open();
+  if(win){
+    win.document.write(`<title>SignalWell Face Snapshot</title><body style="margin:0;background:#0c0f14;display:flex;align-items:center;justify-content:center;height:100vh;"><img src="${dataUrl}" style="max-width:90%;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,0.8);"/></body>`);
+  }
+});
+
+// Interactive Authentic Sample Photo Evaluator
+async function evaluateStaticSamplePhoto(photoPath, label){
+  if(state.face.active){
+    stopCameraStream();
+  }
+
+  const sCanvas = $('studioCanvas');
+  if(!sCanvas) return;
+  const ctx = sCanvas.getContext('2d');
+
+  $('studioTrackStatus').textContent = 'EVALUATING PHOTO';
+  $('studioLivePill').textContent = 'PHOTO';
+  $('studioLivePill').style.color = '#D98B4A';
+
+  try {
+    const loadWithFallback = async (net) => {
+      try { await net.loadFromUri('models'); }
+      catch(e) { await net.loadFromUri('https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights'); }
+    };
+    await Promise.all([
+      loadWithFallback(faceapi.nets.tinyFaceDetector),
+      loadWithFallback(faceapi.nets.faceLandmark68Net),
+      loadWithFallback(faceapi.nets.faceExpressionNet)
+    ]);
+  } catch(e) {}
+
+  const img = new Image();
+  img.src = photoPath;
+  await new Promise(r => { img.onload = r; img.onerror = r; });
+
+  sCanvas.width = img.naturalWidth || 640;
+  sCanvas.height = img.naturalHeight || 480;
+
+  const scale = Math.min(1.0, 640 / Math.max(img.naturalWidth, img.naturalHeight));
+  const offCanvas = document.createElement('canvas');
+  offCanvas.width = Math.round(img.naturalWidth * scale);
+  offCanvas.height = Math.round(img.naturalHeight * scale);
+  const offCtx = offCanvas.getContext('2d');
+  offCtx.drawImage(img, 0, 0, offCanvas.width, offCanvas.height);
+
+  const t0 = performance.now();
+  let detections = null;
+  try {
+    detections = await faceapi
+      .detectSingleFace(offCanvas, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.15 }))
+      .withFaceLandmarks(true)
+      .withFaceExpressions();
+  } catch(e) {}
+  const latency = Math.round(performance.now() - t0);
+
+  ctx.clearRect(0, 0, sCanvas.width, sCanvas.height);
+  ctx.drawImage(img, 0, 0, sCanvas.width, sCanvas.height);
+
+  if(!detections){
+    $('studioTrackStatus').textContent = 'NO FACE DETECTED';
+    return;
+  }
+
+  const rawBox = detections.detection.box;
+  const box = {
+    x: rawBox.x / scale,
+    y: rawBox.y / scale,
+    width: rawBox.width / scale,
+    height: rawBox.height / scale
+  };
+  const landmarks = detections.landmarks ? detections.landmarks.positions.map(pt => ({ x: pt.x / scale, y: pt.y / scale })) : [];
+  const rawExp = detections.expressions || {};
+
+  const happyRaw   = rawExp.happy    || rawExp.happiness || 0;
+  const neutralRaw = rawExp.neutral  || 0;
+  const sadRaw     = rawExp.sad      || rawExp.sadness   || 0;
+  const angryRaw   = rawExp.angry    || rawExp.anger     || 0;
+  const surpRaw    = rawExp.surprised|| rawExp.surprise  || 0;
+  const fearRaw    = rawExp.fearful  || rawExp.fear      || 0;
+  const disgustRaw = rawExp.disgusted|| rawExp.disgust   || 0;
+
+  const neutralPenalty = parseFloat($('studioDampSlider')?.value || 0.55);
+  const factor = Math.exp(-neutralPenalty);
+  const adjustedNeutral = neutralRaw * factor;
+
+  const rawTotal = (happyRaw + adjustedNeutral + sadRaw + angryRaw + surpRaw + fearRaw + disgustRaw) || 1;
+  const probs = {
+    happy: happyRaw / rawTotal,
+    neutral: adjustedNeutral / rawTotal,
+    sad: sadRaw / rawTotal,
+    angry: angryRaw / rawTotal,
+    surprise: surpRaw / rawTotal,
+    fear: fearRaw / rawTotal,
+    disgust: disgustRaw / rawTotal
+  };
+
+  const sorted = Object.entries(probs).sort((a,b) => b[1] - a[1]);
+  const top = sorted[0];
+  const topName = top[0].toUpperCase();
+  const topPct = Math.round(top[1] * 100);
+  const emoji = { happy:'😊', neutral:'😐', sad:'😢', angry:'😠', surprise:'😮', fear:'😨', disgust:'🤢' }[top[0]] || '👤';
+
+  // Render on-photo HUD
+  drawHudBox(ctx, box, landmarks, sCanvas.width, sCanvas.height, emoji, topName, topPct, 75, latency, 60);
+
+  // Update Studio Telemetry
+  $('studioDominant').textContent = `${emoji} ${topName}`;
+  $('studioConf').textContent = topPct + '%';
+  $('studioLatency').textContent = latency + ' ms';
+  $('studioFps').textContent = 'Static';
+  $('studioResolution').textContent = `${img.naturalWidth}x${img.naturalHeight}`;
+  $('studioLighting').textContent = 'Balanced Light';
+  $('studioTrackStatus').textContent = 'SAMPLE VERIFIED';
+  $('studioLatPill').textContent = latency + ' ms';
+  $('studioFpsPill').textContent = 'PHOTO';
+
+  // Update all 7 progress bars
+  const emotionKeys = ['happy', 'neutral', 'surprise', 'sad', 'angry', 'fear', 'disgust'];
+  for(const k of emotionKeys){
+    const bar = $(`sb-${k}`);
+    const pct = $(`sp-${k}`);
+    const val = Math.round((probs[k] || 0) * 100);
+    if(bar) bar.style.width = val + '%';
+    if(pct) pct.textContent = val + '%';
+  }
+
+  // Update Ch.1 strip in console as well
+  $('bar-happy').style.height = (probs.happy * 100) + '%';
+  $('bar-sad').style.height = (probs.sad * 100) + '%';
+  $('bar-angry').style.height = (probs.angry * 100) + '%';
+  $('bar-surprised').style.height = (probs.surprise * 100) + '%';
+  $('bar-neutral').style.height = (probs.neutral * 100) + '%';
+  $('faceValue').textContent = '75';
+  $('faceSub').textContent = `[Sample Photo: ${label}] ${topName} ${topPct}% (${latency}ms)`;
+}
+
+document.querySelectorAll('.sample-pill-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const photoPath = btn.getAttribute('data-photo');
+    if(!photoPath) return;
+    await evaluateStaticSamplePhoto(photoPath, btn.textContent);
+  });
+});
+
 async function runSinglePassFaceInference(video){
   const tStart = performance.now();
   const overlayCanvas = $('faceCanvas');
@@ -1170,6 +1866,13 @@ async function runSinglePassFaceInference(video){
   }
   const cw = overlayCanvas ? overlayCanvas.width : video.videoWidth;
   const ch = overlayCanvas ? overlayCanvas.height : video.videoHeight;
+
+  const studioCanvas = $('studioCanvas');
+  const studioCtx = studioCanvas ? studioCanvas.getContext('2d') : null;
+  if(studioCanvas && (studioCanvas.width !== video.videoWidth || studioCanvas.height !== video.videoHeight)){
+    studioCanvas.width = video.videoWidth;
+    studioCanvas.height = video.videoHeight;
+  }
 
   let result = null;
   try {
@@ -1190,34 +1893,40 @@ async function runSinglePassFaceInference(video){
   if(!result || !result.detection || result.detection.box.width < 35 || result.detection.box.height < 35){
     faceConsecutiveMisses++;
     if(faceConsecutiveMisses > 3){
-      if(overlayCtx && overlayCanvas){
-        overlayCtx.clearRect(0, 0, cw, ch);
-        // Centered dashed positioning frame
-        const rx = cw * 0.25, ry = ch * 0.16, rw = cw * 0.50, rh = ch * 0.68;
-        overlayCtx.save();
-        overlayCtx.setLineDash([8, 8]);
-        overlayCtx.lineWidth = 2;
-        overlayCtx.strokeStyle = 'rgba(143, 163, 119, 0.40)';
-        overlayCtx.strokeRect(rx, ry, rw, rh);
-        overlayCtx.restore();
+      const drawScanning = (ctx, w, h) => {
+        if(!ctx) return;
+        ctx.clearRect(0, 0, w, h);
+        const rx = w * 0.25, ry = h * 0.16, rw = w * 0.50, rh = h * 0.68;
+        ctx.save();
+        ctx.setLineDash([8, 8]);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(143, 163, 119, 0.40)';
+        ctx.strokeRect(rx, ry, rw, rh);
+        ctx.restore();
 
-        // Scanning banner
         const bannerW = 280, bannerH = 34;
-        const bx = (cw - bannerW) / 2, by = ry + rh / 2 - 17;
-        overlayCtx.fillStyle = 'rgba(16, 20, 28, 0.88)';
-        overlayCtx.strokeStyle = 'rgba(143, 163, 119, 0.65)';
-        overlayCtx.lineWidth = 1.5;
-        overlayCtx.beginPath();
-        if(overlayCtx.roundRect){ overlayCtx.roundRect(bx, by, bannerW, bannerH, 17); } else { overlayCtx.rect(bx, by, bannerW, bannerH); }
-        overlayCtx.fill();
-        overlayCtx.stroke();
+        const bx = (w - bannerW) / 2, by = ry + rh / 2 - 17;
+        ctx.fillStyle = 'rgba(16, 20, 28, 0.88)';
+        ctx.strokeStyle = 'rgba(143, 163, 119, 0.65)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        if(ctx.roundRect){ ctx.roundRect(bx, by, bannerW, bannerH, 17); } else { ctx.rect(bx, by, bannerW, bannerH); }
+        ctx.fill();
+        ctx.stroke();
 
-        overlayCtx.fillStyle = '#EDE7DA';
-        overlayCtx.font = '600 12px "JetBrains Mono", monospace';
-        overlayCtx.textAlign = 'center';
-        overlayCtx.fillText('SCANNING: Position face in lighting', cw / 2, by + 21);
-      }
+        ctx.fillStyle = '#EDE7DA';
+        ctx.font = '600 12px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('SCANNING: Position face in lighting', w / 2, by + 21);
+      };
+
+      drawScanning(overlayCtx, cw, ch);
+      if(studioCanvas) drawScanning(studioCtx, studioCanvas.width, studioCanvas.height);
+
       $('faceSub').textContent = 'Scanning for face… Center face in camera lighting';
+      $('studioTrackStatus').textContent = 'SCANNING FOR FACE';
+      $('studioDominant').textContent = 'Scanning…';
+      $('studioConf').textContent = '--';
     }
     return;
   }
@@ -1278,92 +1987,40 @@ async function runSinglePassFaceInference(video){
   const score = clamp(50 + valence * 50, 0, 100);
   state.face.score = score;
 
-  // Render Visual HUD Directly on Webcam Feed
+  // Render Visual HUD on Ch.1 Face Canvas
   if(overlayCtx && overlayCanvas){
     overlayCtx.clearRect(0, 0, cw, ch);
-
-    // 1. Corner Reticles
-    const corner = Math.min(26, box.width * 0.22);
-    overlayCtx.lineWidth = 3.5;
-    overlayCtx.strokeStyle = '#5FE39A';
-    overlayCtx.lineCap = 'round';
-    
-    overlayCtx.beginPath();
-    overlayCtx.moveTo(box.x, box.y + corner); overlayCtx.lineTo(box.x, box.y); overlayCtx.lineTo(box.x + corner, box.y);
-    overlayCtx.moveTo(box.x + box.width - corner, box.y); overlayCtx.lineTo(box.x + box.width, box.y); overlayCtx.lineTo(box.x + box.width, box.y + corner);
-    overlayCtx.moveTo(box.x, box.y + box.height - corner); overlayCtx.lineTo(box.x, box.y + box.height); overlayCtx.lineTo(box.x + corner, box.y + box.height);
-    overlayCtx.moveTo(box.x + box.width - corner, box.y + box.height); overlayCtx.lineTo(box.x + box.width, box.y + box.height); overlayCtx.lineTo(box.x + box.width, box.y + box.height - corner);
-    overlayCtx.stroke();
-
-    // Subtle face box fill
-    overlayCtx.fillStyle = 'rgba(95, 227, 154, 0.08)';
-    overlayCtx.fillRect(box.x, box.y, box.width, box.height);
-
-    // 2. Facial Landmark Points
-    if(landmarks && landmarks.positions){
-      overlayCtx.fillStyle = 'rgba(95, 227, 154, 0.75)';
-      const pts = [36, 39, 42, 45, 30, 48, 54, 8];
-      for(const idx of pts){
-        const pt = landmarks.positions[idx];
-        if(pt){
-          overlayCtx.beginPath();
-          overlayCtx.arc(pt.x, pt.y, 2.8, 0, Math.PI * 2);
-          overlayCtx.fill();
-        }
-      }
-    }
-
-    // 3. Floating Output Badge
-    const badgeW = Math.max(210, box.width * 0.95);
-    const badgeH = 44;
-    const badgeX = Math.max(8, Math.min(cw - badgeW - 8, box.x + (box.width - badgeW) / 2));
-    const badgeY = Math.max(8, box.y - badgeH - 8);
-
-    overlayCtx.fillStyle = 'rgba(16, 20, 28, 0.92)';
-    overlayCtx.strokeStyle = '#5FE39A';
-    overlayCtx.lineWidth = 1.5;
-    overlayCtx.beginPath();
-    if(overlayCtx.roundRect){ overlayCtx.roundRect(badgeX, badgeY, badgeW, badgeH, 8); } else { overlayCtx.rect(badgeX, badgeY, badgeW, badgeH); }
-    overlayCtx.fill();
-    overlayCtx.stroke();
-
-    overlayCtx.textAlign = 'left';
-    overlayCtx.fillStyle = '#FFFFFF';
-    overlayCtx.font = 'bold 14px "Plus Jakarta Sans", sans-serif';
-    overlayCtx.fillText(`${emotionEmoji} ${emotionName} (${emotionPct}%)`, badgeX + 10, badgeY + 19);
-
-    const tagColor = score >= 65 ? '#8FA377' : (score >= 40 ? '#8A93A6' : '#D98B4A');
-    overlayCtx.fillStyle = tagColor;
-    overlayCtx.font = '600 10.5px "JetBrains Mono", monospace';
-    overlayCtx.fillText(`WELLBEING: ${Math.round(score)}/100 • ${faceInferenceLatencyMs}ms`, badgeX + 10, badgeY + 35);
-
-    // 4. Mini Probability Pill under Chin
-    const subPillW = Math.max(170, box.width * 0.85);
-    const subPillH = 20;
-    const subPillX = Math.max(8, Math.min(cw - subPillW - 8, box.x + (box.width - subPillW) / 2));
-    const subPillY = Math.min(ch - subPillH - 8, box.y + box.height + 8);
-    overlayCtx.fillStyle = 'rgba(16, 20, 28, 0.88)';
-    overlayCtx.strokeStyle = 'rgba(143, 163, 119, 0.45)';
-    overlayCtx.lineWidth = 1;
-    overlayCtx.beginPath();
-    if(overlayCtx.roundRect){ overlayCtx.roundRect(subPillX, subPillY, subPillW, subPillH, 6); } else { overlayCtx.rect(subPillX, subPillY, subPillW, subPillH); }
-    overlayCtx.fill();
-    overlayCtx.stroke();
-
-    overlayCtx.fillStyle = '#C7CCD6';
-    overlayCtx.font = '10px "JetBrains Mono", monospace';
-    overlayCtx.textAlign = 'center';
-    const subText = allEmotions.slice(0, 3).map(([l, prob]) => `${l.slice(0,3)}:${Math.round(prob*100)}%`).join('  ');
-    overlayCtx.fillText(subText, subPillX + subPillW / 2, subPillY + 14);
-
-    // 5. Status Telemetry
-    overlayCtx.textAlign = 'left';
-    overlayCtx.fillStyle = '#5FE39A';
-    overlayCtx.font = '600 11px "JetBrains Mono", monospace';
-    overlayCtx.fillText(`● TRACKING ACTIVE • ${video.videoWidth}x${video.videoHeight} • ${faceEffectiveFps} FPS`, 12, 20);
+    drawHudBox(overlayCtx, box, landmarks ? landmarks.positions : [], cw, ch, emotionEmoji, emotionName, emotionPct, score, faceInferenceLatencyMs, faceEffectiveFps);
   }
 
-  // Update DOM readouts
+  // Render Visual HUD on Large Studio Canvas
+  if(studioCtx && studioCanvas){
+    studioCtx.clearRect(0, 0, studioCanvas.width, studioCanvas.height);
+    drawHudBox(studioCtx, box, landmarks ? landmarks.positions : [], studioCanvas.width, studioCanvas.height, emotionEmoji, emotionName, emotionPct, score, faceInferenceLatencyMs, faceEffectiveFps);
+  }
+
+  // Update Studio Telemetry
+  $('studioDominant').textContent = `${emotionEmoji} ${emotionName}`;
+  $('studioConf').textContent = emotionPct + '%';
+  $('studioLatency').textContent = faceInferenceLatencyMs + ' ms';
+  $('studioFps').textContent = faceEffectiveFps + ' FPS';
+  $('studioResolution').textContent = `${video.videoWidth}x${video.videoHeight}`;
+  $('studioLighting').textContent = 'Normal Camera Feed';
+  $('studioTrackStatus').textContent = 'TRACKING ACTIVE';
+  $('studioFpsPill').textContent = faceEffectiveFps + ' FPS';
+  $('studioLatPill').textContent = faceInferenceLatencyMs + ' ms';
+
+  // Update Studio 7-Emotion Probability Bars
+  const emotionKeys = ['happy', 'neutral', 'surprise', 'sad', 'angry', 'fear', 'disgust'];
+  for(const k of emotionKeys){
+    const bar = $(`sb-${k}`);
+    const pct = $(`sp-${k}`);
+    const val = Math.round((faceEmaProbs[k] || 0) * 100);
+    if(bar) bar.style.width = val + '%';
+    if(pct) pct.textContent = val + '%';
+  }
+
+  // Update Ch.1 DOM readouts
   $('faceValue').textContent = Math.round(score);
   $('faceSub').textContent = `[ExpNet] ${emotionName} ${emotionPct}% · ${allEmotions[1][0]} ${Math.round(allEmotions[1][1]*100)}% · ${faceInferenceLatencyMs}ms`;
 

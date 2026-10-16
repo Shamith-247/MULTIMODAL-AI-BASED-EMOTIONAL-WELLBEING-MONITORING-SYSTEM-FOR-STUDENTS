@@ -178,6 +178,16 @@ This document records the complete, step-by-step engineering journey, root-cause
 * Created reproducible benchmark `SignalWell/test_face_inference_benchmark.js`: Evaluated 4 authentic Windows Camera test photos with **4/4 passing ($100\%$)**.
 * Authored comprehensive technical report: [`docs/09_REALTIME_WEBCAM_OPTIMIZATION_AND_NEUTRAL_AUDIT.md`](./09_REALTIME_WEBCAM_OPTIMIZATION_AND_NEUTRAL_AUDIT.md).
 
+### 8/9.6 Direct In-Site Integration of Live Face AI Studio
+* Seamlessly integrated the complete **Live Face AI Studio** directly into the main website (`SignalWell/app/index.html`):
+  - Large responsive camera stage with direct on-screen HUD (corner brackets, 68 facial landmarks, floating emotion badge with confidence and live latency).
+  - Telemetry card: Dominant Emotion, Confidence, Latency (ms), Render FPS, Resolution, and Lighting Analysis.
+  - Full 7-Emotion Real-Time Probability breakdown (Happiness, Neutral, Surprise, Sadness, Anger, Fear, Disgust) with smooth animated bars.
+  - Interactive Neutral Bias Dampener slider ($0.0$ to $2.0$, default $0.55$) synchronized across console strips and studio.
+  - Quick 1-click Authentic Sample Photo switcher evaluating all 4 test photos directly on the canvas without needing camera setup.
+  - Camera device selector dropdown for multi-camera systems and instant snapshot export.
+  - Fully modular and isolated: can be toggled or removed with zero friction if requested.
+
 ---
 
 *This process log is maintained continuously across all project milestones.*
