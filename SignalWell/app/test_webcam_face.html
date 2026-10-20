@@ -264,10 +264,12 @@
         <h3>Real-Time Emotion Probabilities</h3>
         <div id="probBars">
           <div class="prog-row"><div class="prog-head"><span>Happiness</span><span id="p-happy">0%</span></div><div class="prog-bar"><div class="prog-fill" id="b-happy"></div></div></div>
+          <div class="prog-row"><div class="prog-head"><span>Disgust</span><span id="p-disgust">0%</span></div><div class="prog-bar"><div class="prog-fill" id="b-disgust" style="background:#55C77A;"></div></div></div>
           <div class="prog-row"><div class="prog-head"><span>Neutral</span><span id="p-neutral">0%</span></div><div class="prog-bar"><div class="prog-fill" id="b-neutral"></div></div></div>
           <div class="prog-row"><div class="prog-head"><span>Surprise</span><span id="p-surprise">0%</span></div><div class="prog-bar"><div class="prog-fill" id="b-surprise"></div></div></div>
           <div class="prog-row"><div class="prog-head"><span>Sadness</span><span id="p-sad">0%</span></div><div class="prog-bar"><div class="prog-fill" id="b-sad"></div></div></div>
           <div class="prog-row"><div class="prog-head"><span>Anger</span><span id="p-angry">0%</span></div><div class="prog-bar"><div class="prog-fill" id="b-angry"></div></div></div>
+          <div class="prog-row"><div class="prog-head"><span>Fear</span><span id="p-fear">0%</span></div><div class="prog-bar"><div class="prog-fill" id="b-fear" style="background:#D97706;"></div></div></div>
         </div>
 
         <div class="slider-row">
@@ -555,14 +557,35 @@ async function detectLoop(){
         const landmarks = full.landmarks;
         const rawExp = full.expressions || {};
 
-        // Calculate emotion probabilities with calibrated neutral dampening
-        const happyRaw   = rawExp.happy    || rawExp.happiness || 0;
-        const neutralRaw = rawExp.neutral  || 0;
-        const sadRaw     = rawExp.sad      || rawExp.sadness   || 0;
-        const angryRaw   = rawExp.angry    || rawExp.anger     || 0;
-        const surpRaw    = rawExp.surprised|| rawExp.surprise  || 0;
-        const fearRaw    = rawExp.fearful  || rawExp.fear      || 0;
-        const disgustRaw = rawExp.disgusted|| rawExp.disgust   || 0;
+        // Calculate emotion probabilities with calibrated neutral dampening & geometric feature fusion
+        let happyRaw   = (rawExp.happy    || rawExp.happiness || 0) * 1.45;
+        let neutralRaw = rawExp.neutral  || 0;
+        let sadRaw     = (rawExp.sad      || rawExp.sadness   || 0);
+        let angryRaw   = (rawExp.angry    || rawExp.anger     || 0);
+        let surpRaw    = (rawExp.surprised|| rawExp.surprise  || 0);
+        let fearRaw    = (rawExp.fearful  || rawExp.fear      || 0);
+        let disgustRaw = (rawExp.disgusted|| rawExp.disgust   || 0) * 2.5; // Compensate for severe training class imbalance
+
+        // Geometric landmark analysis for subtle Happiness (AU12) and Disgust (AU9/AU10)
+        if(landmarks && landmarks.positions){
+          const pts = landmarks.positions;
+          // Mouth corners (48, 54), top lip (51), bottom lip (57), nose tip (30), subnasale (33)
+          const mouthW = Math.hypot(pts[54].x - pts[48].x, pts[54].y - pts[48].y) / (box.width || 1);
+          const mouthCenterY = (pts[51].y + pts[57].y) / 2;
+          const cornerAvgY = (pts[48].y + pts[54].y) / 2;
+          const smileLift = (mouthCenterY - cornerAvgY) / (box.height || 1);
+
+          // AU12 Smile check: mouth widened and corners elevated
+          if(smileLift > 0.012 || mouthW > 0.43){
+            happyRaw += Math.max(0.18, smileLift * 6.5);
+          }
+
+          // AU9 / AU10 Disgust sneer check: upper lip elevated toward subnasale (nose base)
+          const lipToNose = Math.hypot(pts[33].x - pts[51].x, pts[33].y - pts[51].y) / (box.height || 1);
+          if(lipToNose < 0.065){
+            disgustRaw += 0.38 + (0.065 - lipToNose) * 8.5;
+          }
+        }
 
         const neutralPenalty = parseFloat(dampSlider.value || 0.55);
         const factor = Math.exp(-neutralPenalty);
@@ -629,6 +652,10 @@ async function detectLoop(){
 
         document.getElementById('p-happy').textContent = Math.round(happy*100) + '%';
         document.getElementById('b-happy').style.width = (happy*100) + '%';
+        if(document.getElementById('p-disgust')){
+          document.getElementById('p-disgust').textContent = Math.round(disgust*100) + '%';
+          document.getElementById('b-disgust').style.width = (disgust*100) + '%';
+        }
         document.getElementById('p-neutral').textContent = Math.round(neutral*100) + '%';
         document.getElementById('b-neutral').style.width = (neutral*100) + '%';
         document.getElementById('p-surprise').textContent = Math.round(surprise*100) + '%';
@@ -637,6 +664,10 @@ async function detectLoop(){
         document.getElementById('b-sad').style.width = (sad*100) + '%';
         document.getElementById('p-angry').textContent = Math.round(angry*100) + '%';
         document.getElementById('b-angry').style.width = (angry*100) + '%';
+        if(document.getElementById('p-fear')){
+          document.getElementById('p-fear').textContent = Math.round(fear*100) + '%';
+          document.getElementById('b-fear').style.width = (fear*100) + '%';
+        }
 
         // Mirrored coordinate calculation to align with mirrored selfie video
         const bx = cw - (box.x + box.width);

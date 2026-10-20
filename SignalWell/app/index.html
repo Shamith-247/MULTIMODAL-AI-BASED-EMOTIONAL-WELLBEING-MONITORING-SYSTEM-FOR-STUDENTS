@@ -526,10 +526,12 @@
         </div>
         <div class="expr-bars" id="exprBars">
           <div class="bar"><i id="bar-happy" style="height:0%"></i><span>happy</span></div>
+          <div class="bar"><i id="bar-disgust" style="height:0%; background:#55C77A;"></i><span>disg.</span></div>
+          <div class="bar"><i id="bar-neutral" style="height:0%"></i><span>neut.</span></div>
+          <div class="bar"><i id="bar-surprised" style="height:0%"></i><span>surp.</span></div>
           <div class="bar"><i id="bar-sad" style="height:0%"></i><span>sad</span></div>
           <div class="bar"><i id="bar-angry" style="height:0%"></i><span>angry</span></div>
-          <div class="bar"><i id="bar-surprised" style="height:0%"></i><span>surp.</span></div>
-          <div class="bar"><i id="bar-neutral" style="height:0%"></i><span>neutral</span></div>
+          <div class="bar"><i id="bar-fear" style="height:0%; background:#D97706;"></i><span>fear</span></div>
         </div>
         <div class="strip-ctl" style="margin-top:14px; display:flex; gap:6px; flex-wrap:wrap;">
           <button class="mini-btn" id="faceToggle" aria-pressed="false" style="flex:1;">Enable camera</button>
@@ -1131,10 +1133,12 @@ faceToggle.addEventListener('click', async () => {
     $('faceValue').textContent = '--';
     $('faceSub').textContent = 'Camera off';
     $('bar-happy').style.height = '0%';
+    if($('bar-disgust')) $('bar-disgust').style.height = '0%';
+    $('bar-neutral').style.height = '0%';
+    $('bar-surprised').style.height = '0%';
     $('bar-sad').style.height = '0%';
     $('bar-angry').style.height = '0%';
-    $('bar-surprised').style.height = '0%';
-    $('bar-neutral').style.height = '0%';
+    if($('bar-fear')) $('bar-fear').style.height = '0%';
     recomputeMaster();
   }
 });
@@ -1482,15 +1486,42 @@ async function faceRenderLoop(){
           neutral: 0.5, happy: 0.2, sad: 0.1, surprised: 0.1, angry: 0.05, fearful: 0.03, disgusted: 0.02
         };
         const factor = Math.exp(-neutralPenalty);
+
+        let happyRaw   = (rawExp.happy    || rawExp.happiness || 0) * 1.45;
+        let neutralRaw = (rawExp.neutral  || 0) * factor;
+        let sadRaw     = (rawExp.sad      || rawExp.sadness   || 0);
+        let angryRaw   = (rawExp.angry    || rawExp.anger     || 0);
+        let surpRaw    = (rawExp.surprised|| rawExp.surprise  || 0);
+        let fearRaw    = (rawExp.fearful  || rawExp.fear      || 0);
+        let disgustRaw = (rawExp.disgusted|| rawExp.disgust   || 0) * 2.5; // Compensate for severe training class imbalance
+
+        // Geometric landmark analysis for subtle Happiness (AU12) and Disgust (AU9/AU10)
+        if(landmarks && landmarks.positions){
+          const pts = landmarks.positions;
+          const mouthW = Math.hypot(pts[54].x - pts[48].x, pts[54].y - pts[48].y) / (box.width || 1);
+          const mouthCenterY = (pts[51].y + pts[57].y) / 2;
+          const cornerAvgY = (pts[48].y + pts[54].y) / 2;
+          const smileLift = (mouthCenterY - cornerAvgY) / (box.height || 1);
+
+          if(smileLift > 0.012 || mouthW > 0.43){
+            happyRaw += Math.max(0.18, smileLift * 6.5);
+          }
+
+          const lipToNose = Math.hypot(pts[33].x - pts[51].x, pts[33].y - pts[51].y) / (box.height || 1);
+          if(lipToNose < 0.065){
+            disgustRaw += 0.38 + (0.065 - lipToNose) * 8.5;
+          }
+        }
+
         let sum = 0;
         const normExp = {
-          happy: rawExp.happy || rawExp.happiness || 0,
-          sad: rawExp.sad || rawExp.sadness || 0,
-          angry: rawExp.angry || rawExp.anger || 0,
-          surprise: rawExp.surprised || rawExp.surprise || 0,
-          fear: rawExp.fearful || rawExp.fear || 0,
-          disgust: rawExp.disgusted || rawExp.disgust || 0,
-          neutral: (rawExp.neutral || 0) * factor
+          happy: happyRaw,
+          sad: sadRaw,
+          angry: angryRaw,
+          surprise: surpRaw,
+          fear: fearRaw,
+          disgust: disgustRaw,
+          neutral: neutralRaw
         };
         for(const [label, val] of Object.entries(normExp)){
           sum += val;
@@ -1651,10 +1682,12 @@ async function faceRenderLoop(){
 
       // Update expression bars
       $('bar-happy').style.height = (happyProb * 100) + '%';
+      if($('bar-disgust')) $('bar-disgust').style.height = (disgustProb * 100) + '%';
+      $('bar-neutral').style.height = (neutralProb * 100) + '%';
+      $('bar-surprised').style.height = (surpProb * 100) + '%';
       $('bar-sad').style.height = (sadProb * 100) + '%';
       $('bar-angry').style.height = (angryProb * 100) + '%';
-      $('bar-surprised').style.height = (surpProb * 100) + '%';
-      $('bar-neutral').style.height = (neutralProb * 100) + '%';
+      if($('bar-fear')) $('bar-fear').style.height = (fearProb * 100) + '%';
 
       faceScores.push(score);
       drawSpark('faceSpark', faceScores);
