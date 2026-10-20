@@ -538,12 +538,25 @@
           <button class="mini-btn" id="faceCalibrateBtn" style="flex:1; display:none;" title="Calibrate current resting face as neutral baseline">Calibrate</button>
           <button class="mini-btn" id="faceRecordBtn" style="flex:none; display:none; padding:6px 10px; font-size:0.72rem; color:#FF6B6B; border-color:rgba(232,91,91,0.4);" title="Record live test clip while running emotion model">🔴 Record</button>
           <span id="faceRecordTimer" class="mono" style="display:none; color:#FF6B6B; font-size:0.68rem; font-weight:700; align-self:center; padding:3px 6px; background:rgba(232,91,91,0.15); border-radius:4px; border:1px solid rgba(232,91,91,0.3);">REC 00:00</span>
+          <button class="mini-btn" id="faceUploadVideoBtn" style="flex:none; padding:6px 9px; font-size:0.72rem; color:var(--moss);" title="Upload an existing recorded video file to evaluate">📁 Upload Video</button>
+          <input type="file" id="faceVideoFileInput" accept="video/mp4,video/webm,video/*" style="display:none;">
           <button class="mini-btn" id="loadV7Btn" style="flex:none; padding:6px 9px; font-size:0.72rem;" title="Load exported v7 ONNX model from disk">📁 Load v7 ONNX</button>
           <input type="file" id="faceOnnxFileInput" accept=".onnx" style="display:none;">
         </div>
-        <div id="faceRecordBanner" style="display:none; margin-top:8px; padding:8px 10px; background:rgba(95,227,154,0.12); border:1px solid var(--moss); border-radius:8px; font-size:0.78rem;">
-          <span style="color:var(--bone);">🎬 Test clip recorded!</span>
-          <a id="faceDownloadVideoLink" href="#" download="SignalWell_Face_Recording.webm" style="color:var(--moss); font-weight:700; margin-left:8px; text-decoration:underline;">💾 Download Video (.webm)</a>
+        <div id="faceRecordBanner" style="display:none; margin-top:10px; padding:12px; background:#131822; border:1px solid var(--moss); border-radius:10px; font-size:0.8rem;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <strong style="color:var(--moss);">🎬 Test Recording Analysis</strong>
+            <span id="faceRecordDurTag" class="mono" style="font-size:0.75rem; color:var(--mist);">00:00</span>
+          </div>
+          <video id="faceRecordedVideo" controls playsinline style="width:100%; max-height:160px; border-radius:6px; background:#000; display:block; margin-bottom:8px;"></video>
+          <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-bottom:8px; background:#1B2029; padding:6px 8px; border-radius:6px;">
+            <span>Dominant: <strong id="faceRecordDominant" style="color:var(--moss);">--</strong></span>
+            <span>Wellbeing: <strong id="faceRecordScore">--</strong>/100</span>
+          </div>
+          <div style="display:flex; gap:6px;">
+            <a id="faceDownloadVideoLink" class="mini-btn" style="flex:1; text-align:center; text-decoration:none; display:inline-block; padding:5px 8px; background:var(--moss); color:#000; font-weight:700;" download="SignalWell_Face_Recording.webm">💾 Download Video (.webm)</a>
+            <button id="faceDismissRecordBtn" class="mini-btn" style="flex:none; padding:5px 8px;">✕</button>
+          </div>
         </div>
         <div class="face-ctrl-row" style="display:flex; justify-content:space-between; align-items:center; font-size:.72rem; color:var(--mist-dim); margin-top:5px; padding:0 2px;">
           <span title="Dampens neutral logit bias to reveal subtle expressions">Neutral damp:</span>
@@ -959,14 +972,16 @@ let faceMediaRecorder = null;
 let faceRecordedChunks = [];
 let faceRecordStartTime = 0;
 let faceRecordTimerInterval = null;
+let faceSessionSamples = [];
 const faceRecCanvas = document.createElement('canvas');
 const faceRecCtx = faceRecCanvas.getContext('2d');
 
 function startFaceRecording(){
   const video = $('faceVideo');
-  if(!state.face.active || !video || !video.srcObject) return;
+  if(!video) return;
 
   faceRecordedChunks = [];
+  faceSessionSamples = [];
   faceRecCanvas.width = video.videoWidth || 640;
   faceRecCanvas.height = video.videoHeight || 480;
 
@@ -1036,13 +1051,79 @@ function stopFaceRecording(){
 function finishFaceRecording(){
   const blob = new Blob(faceRecordedChunks, { type: faceMediaRecorder.mimeType || 'video/webm' });
   const url = URL.createObjectURL(blob);
+  const totalSecs = Math.max(1, Math.round((performance.now() - faceRecordStartTime) / 1000));
+  const m = Math.floor(totalSecs / 60), s = totalSecs % 60;
+  const durStr = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+
   if(faceDownloadVideoLink){
     faceDownloadVideoLink.href = url;
     faceDownloadVideoLink.download = `SignalWell_Face_Recording_${Date.now()}.webm`;
   }
+  const videoEl = $('faceRecordedVideo');
+  if(videoEl){
+    videoEl.src = url;
+  }
+  if($('faceRecordDurTag')){
+    $('faceRecordDurTag').textContent = durStr;
+  }
+
+  // Summary statistics
+  const counts = {};
+  let scoreSum = 0;
+  faceSessionSamples.forEach(s => {
+    counts[s.emotion] = (counts[s.emotion] || 0) + 1;
+    scoreSum += (s.score || 50);
+  });
+  let domEm = 'Neutral', maxC = -1;
+  for(const [em, cnt] of Object.entries(counts)){
+    if(cnt > maxC){ maxC = cnt; domEm = em; }
+  }
+  const avgSc = Math.round(scoreSum / (faceSessionSamples.length || 1));
+  if($('faceRecordDominant')) $('faceRecordDominant').textContent = domEm.toUpperCase();
+  if($('faceRecordScore')) $('faceRecordScore').textContent = avgSc;
+
   if(faceRecordBanner){
     faceRecordBanner.style.display = 'block';
+    faceRecordBanner.scrollIntoView({ behavior: 'smooth' });
   }
+}
+
+$('faceDismissRecordBtn')?.addEventListener('click', () => {
+  if(faceRecordBanner) faceRecordBanner.style.display = 'none';
+  const v = $('faceRecordedVideo');
+  if(v) v.pause();
+});
+
+// Upload and evaluate recorded video in main console
+const faceUploadVideoBtn = $('faceUploadVideoBtn');
+const faceVideoFileInput = $('faceVideoFileInput');
+if(faceUploadVideoBtn && faceVideoFileInput){
+  faceUploadVideoBtn.addEventListener('click', () => faceVideoFileInput.click());
+  faceVideoFileInput.addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if(!file) return;
+
+    $('faceSub').textContent = `Loading video ${file.name}…`;
+    await startCameraFlow();
+
+    const video = $('faceVideo');
+    if(video.srcObject){
+      video.srcObject.getTracks().forEach(t => t.stop());
+      video.srcObject = null;
+    }
+    video.src = URL.createObjectURL(file);
+    video.loop = false;
+    video.muted = true;
+    try { await video.play(); } catch(err){}
+
+    $('faceSub').textContent = `Evaluating video: ${file.name}…`;
+    if(faceRecordBtn) faceRecordBtn.style.display = 'inline-block';
+    startFaceRecording();
+    video.onended = () => {
+      $('faceSub').textContent = `Analysis complete for ${file.name}.`;
+      stopFaceRecording();
+    };
+  });
 }
 
 if(faceRecordBtn){
@@ -1679,6 +1760,14 @@ async function faceRenderLoop(){
       const engineTag = faceEngine === 'onnx-v7' ? '[v7 ONNX]' : '[ExpNet]';
       $('faceSub').textContent = engineTag + ' ' +
         allEmotions.slice(0, 3).map(([label, prob]) => label + ' ' + Math.round(prob*100) + '%').join(' · ');
+
+      if(isFaceRecording){
+        faceSessionSamples.push({
+          time: Math.round(performance.now() - faceRecordStartTime),
+          emotion: topEmotion[0],
+          score: Math.round(score)
+        });
+      }
 
       // Update expression bars
       $('bar-happy').style.height = (happyProb * 100) + '%';

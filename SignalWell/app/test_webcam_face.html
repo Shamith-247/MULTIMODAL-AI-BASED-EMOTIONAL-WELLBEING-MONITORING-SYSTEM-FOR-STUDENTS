@@ -217,6 +217,8 @@
         <button class="btn btn-ghost" id="snapBtn" disabled>Capture Snapshot</button>
         <button class="btn btn-ghost" id="recordBtn" disabled style="color:#FF6B6B; border-color:rgba(232,91,91,0.4);">🔴 Start Recording</button>
         <span id="recordTimer" class="mono" style="display:none; color:#FF6B6B; font-weight:700; font-size:0.85rem; padding:6px 10px; background:rgba(232,91,91,0.15); border-radius:6px; border:1px solid rgba(232,91,91,0.3);">REC 00:00</span>
+        <button class="btn btn-ghost" id="uploadVideoBtn" style="color:var(--accent); border-color:rgba(95,227,154,0.4);" title="Upload an existing recorded video to evaluate with the emotion model">📁 Upload Recorded Video</button>
+        <input type="file" id="videoFileInput" accept="video/mp4,video/webm,video/quicktime,video/*" style="display:none;">
       </div>
 
       <!-- Recorded Session Review & Export Card -->
@@ -948,6 +950,45 @@ function finishRecording(){
 
   resCard.style.display = 'block';
   resCard.scrollIntoView({ behavior: 'smooth' });
+
+  // Also populate and open the prominent full-screen Results Modal
+  const modal = document.getElementById('resultsModal');
+  const modalVideo = document.getElementById('modalVideoPlayback');
+  const modalDownloadVideoBtn = document.getElementById('modalDownloadVideoBtn');
+  const modalDownloadLogBtn = document.getElementById('modalDownloadLogBtn');
+  const modalDurationTag = document.getElementById('modalDurationTag');
+  const modalDominantBadge = document.getElementById('modalDominantBadge');
+  const modalAvgConfidence = document.getElementById('modalAvgConfidence');
+  const modalFrameCount = document.getElementById('modalFrameCount');
+  const modalBreakdownRows = document.getElementById('modalBreakdownRows');
+
+  if(modal && modalVideo){
+    modalVideo.src = videoUrl;
+    modalDownloadVideoBtn.href = videoUrl;
+    modalDownloadVideoBtn.download = `SignalWell_Face_Recording_${Date.now()}.webm`;
+    modalDurationTag.textContent = `Duration: ${durStr} • Size: ${(blob.size / 1024 / 1024).toFixed(2)} MB`;
+    modalDominantBadge.textContent = `${domEmotionName} (${Math.round((domCount/totalSamples)*100)}%)`;
+    modalAvgConfidence.textContent = `${avgConf}%`;
+    modalFrameCount.textContent = `${sessionEmotionSamples.length} frames`;
+
+    modalBreakdownRows.innerHTML = Object.entries(counts).map(([em, cnt]) => {
+      const pct = Math.round((cnt / totalSamples) * 100);
+      const color = em === 'Happiness' ? '#5FE39A' : (em === 'Neutral' ? '#8A93A6' : (em === 'Disgust' ? '#55C77A' : '#E85B5B'));
+      return `
+        <div style="display:flex; align-items:center; gap:8px; font-size:0.8rem;">
+          <span style="width:75px; color:var(--muted);">${em}:</span>
+          <div style="flex:1; height:6px; background:#1C222E; border-radius:3px; overflow:hidden;">
+            <div style="width:${pct}%; height:100%; background:${color};"></div>
+          </div>
+          <span class="mono" style="width:38px; text-align:right; font-weight:600;">${pct}%</span>
+        </div>
+      `;
+    }).join('');
+
+    modalDownloadLogBtn.onclick = downloadLogBtn.onclick;
+    modal.style.display = 'flex';
+  }
+
   log(`✓ Recording ready! Captured ${totalSecs}s of live face tracking with ${sessionEmotionSamples.length} frames analyzed.`, 'ok');
 }
 
@@ -958,6 +999,68 @@ recordBtn.addEventListener('click', () => {
     stopRecording();
   }
 });
+
+// Upload and analyze an existing recorded video file
+const uploadVideoBtn = document.getElementById('uploadVideoBtn');
+const videoFileInput = document.getElementById('videoFileInput');
+
+if(uploadVideoBtn && videoFileInput){
+  uploadVideoBtn.addEventListener('click', () => videoFileInput.click());
+  videoFileInput.addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if(!file) return;
+
+    log(`Loading recorded video file: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)…`, 'ok');
+    const ready = await loadModels();
+    if(!ready) return;
+
+    if(stream){
+      stream.getTracks().forEach(t => t.stop());
+      stream = null;
+    }
+
+    video.srcObject = null;
+    video.src = URL.createObjectURL(file);
+    video.loop = false;
+    video.muted = true;
+    try { await video.play(); } catch(err){}
+
+    document.getElementById('camStatus').textContent = 'Video: ' + file.name.slice(0, 14);
+    document.getElementById('camStatus').style.color = '#5FE39A';
+    document.getElementById('telemetryState').textContent = 'ANALYZING';
+    stopBtn.disabled = false;
+    snapBtn.disabled = false;
+    recordBtn.disabled = false;
+
+    // Start recording the evaluation loop so a composite clip is produced
+    startRecording();
+    isDetecting = true;
+    detectLoop();
+
+    video.onended = () => {
+      log('Video evaluation finished! Generating results report…', 'ok');
+      stopRecording();
+    };
+  });
+}
+
+// Modal Close Handlers
+const resultsModal = document.getElementById('resultsModal');
+const modalCloseBtn = document.getElementById('modalCloseBtn');
+if(modalCloseBtn && resultsModal){
+  modalCloseBtn.addEventListener('click', () => {
+    resultsModal.style.display = 'none';
+    const mv = document.getElementById('modalVideoPlayback');
+    if(mv) mv.pause();
+  });
+  resultsModal.addEventListener('click', (e) => {
+    if(e.target === resultsModal){
+      resultsModal.style.display = 'none';
+      const mv = document.getElementById('modalVideoPlayback');
+      if(mv) mv.pause();
+    }
+  });
+}
 
 // Snapshot Capture Button
 snapBtn.addEventListener('click', () => {
@@ -980,6 +1083,48 @@ snapBtn.addEventListener('click', () => {
 // Auto-check cameras on page load
 getCameras();
 </script>
+
+<!-- Prominent Full-Screen Recorded Results Modal -->
+<div id="resultsModal" style="display:none; position:fixed; inset:0; z-index:999; background:rgba(8,11,16,0.88); backdrop-filter:blur(6px); align-items:center; justify-content:center; padding:20px;">
+  <div style="background:#131822; border:1px solid var(--accent); border-radius:14px; max-width:850px; width:100%; max-height:92vh; overflow-y:auto; padding:24px; box-shadow:0 25px 60px rgba(0,0,0,0.8);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; border-bottom:1px solid var(--border); padding-bottom:12px;">
+      <div>
+        <h2 style="font-size:1.3rem; color:#fff; margin:0 0 4px 0;">🎉 Recorded Session Emotion Analysis</h2>
+        <span id="modalDurationTag" class="mono" style="font-size:0.82rem; color:var(--muted);">Duration: 00:00</span>
+      </div>
+      <button id="modalCloseBtn" style="background:transparent; border:none; color:var(--muted); font-size:1.4rem; cursor:pointer; padding:4px 8px;">✕</button>
+    </div>
+
+    <div style="display:grid; grid-template-columns: 1.1fr 1fr; gap:20px; align-items:start;">
+      <div>
+        <video id="modalVideoPlayback" controls playsinline style="width:100%; border-radius:10px; background:#000; border:1px solid var(--border); max-height:300px; display:block;"></video>
+        <div style="display:flex; gap:10px; margin-top:12px;">
+          <a id="modalDownloadVideoBtn" class="btn" style="flex:1; text-align:center; text-decoration:none; padding:10px;" download="SignalWell_Face_Recording.webm">💾 Download Video (.webm)</a>
+          <button id="modalDownloadLogBtn" class="btn btn-ghost" style="flex:1; padding:10px;">📊 Export JSON Log</button>
+        </div>
+      </div>
+
+      <div style="background:#0C0F14; border:1px solid var(--border); border-radius:10px; padding:16px;">
+        <div style="font-size:0.78rem; text-transform:uppercase; letter-spacing:0.1em; color:var(--muted); margin-bottom:6px;">Overall Dominant Emotion</div>
+        <div id="modalDominantBadge" style="font-size:1.35rem; font-weight:700; color:var(--accent); margin-bottom:14px;">--</div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; background:#151A24; padding:10px; border-radius:8px;">
+          <div>
+            <div style="font-size:0.72rem; color:var(--muted);">Average Confidence</div>
+            <div id="modalAvgConfidence" class="mono" style="font-size:1.05rem; font-weight:700; color:#fff;">--</div>
+          </div>
+          <div>
+            <div style="font-size:0.72rem; color:var(--muted);">Frames Evaluated</div>
+            <div id="modalFrameCount" class="mono" style="font-size:1.05rem; font-weight:700; color:#fff;">--</div>
+          </div>
+        </div>
+
+        <div style="font-size:0.82rem; font-weight:600; color:#fff; margin-bottom:8px;">Emotion Distribution Across Recording:</div>
+        <div id="modalBreakdownRows" style="display:flex; flex-direction:column; gap:6px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
 </body>
 </html>
 
