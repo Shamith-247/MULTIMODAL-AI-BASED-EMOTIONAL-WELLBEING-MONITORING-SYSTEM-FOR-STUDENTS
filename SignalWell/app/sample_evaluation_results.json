@@ -3,152 +3,152 @@
     "id": "sample_1",
     "groundTruth": "Anger / Intense Stern Focus",
     "faceDetected": true,
-    "detectionConfidence": 0.7532201562677696,
+    "detectionConfidence": 0.7548807765451226,
     "box": {
-      "x": 642,
+      "x": 641,
       "y": 378,
-      "width": 520,
+      "width": 521,
       "height": 516
     },
     "rawTop": {
       "emotion": "angry",
-      "score": 0.6605130434036255
+      "score": 0.7744186520576477
     },
     "calibratedTop": {
       "emotion": "angry",
-      "score": 0.9469974267391604
+      "score": 0.9709950823361245
     },
     "allRawExpressions": {
-      "neutral": 0.3125186264514923,
-      "happy": 2.0579075510340772e-7,
-      "sad": 0.00004884620648226701,
-      "angry": 0.6605130434036255,
-      "fearful": 1.5500796735068434e-7,
-      "disgusted": 0.0000015914605455691344,
-      "surprised": 0.026917507871985435
+      "neutral": 0.21244844794273376,
+      "happy": 2.681944408777781e-7,
+      "sad": 0.00006138746539363638,
+      "angry": 0.7744186520576477,
+      "fearful": 1.9439852394498303e-7,
+      "disgusted": 0.0000035240459510532673,
+      "surprised": 0.013067543506622314
     },
     "allCalibratedExpressions": {
-      "neutral": 0.014337300923828547,
-      "happy": 2.9504839832594616e-7,
-      "sad": 0.00007003227613237267,
-      "angry": 0.9469974267391604,
-      "fearful": 2.2223958734977518e-7,
-      "disgusted": 0.0000022817248750225034,
-      "surprised": 0.03859244104801789
+      "neutral": 0.012538374169529218,
+      "happy": 3.362722249913264e-7,
+      "sad": 0.0000769699010424439,
+      "angry": 0.9709950823361245,
+      "fearful": 2.437441431226382e-7,
+      "disgusted": 0.000004418580672492031,
+      "surprised": 0.016384574996263248
     }
   },
   {
     "id": "sample_2",
     "groundTruth": "Neutral / Gentle Contentment",
     "faceDetected": true,
-    "detectionConfidence": 0.7684994702507199,
+    "detectionConfidence": 0.7765861456306754,
     "box": {
-      "x": 642,
-      "y": 371,
-      "width": 529,
-      "height": 510
+      "x": 643,
+      "y": 372,
+      "width": 528,
+      "height": 508
     },
     "rawTop": {
       "emotion": "neutral",
-      "score": 0.9564535021781921
+      "score": 0.9644544720649719
     },
     "calibratedTop": {
       "emotion": "neutral",
-      "score": 0.9032301146971209
+      "score": 0.9210098795887189
     },
     "allRawExpressions": {
-      "neutral": 0.9564535021781921,
-      "happy": 0.000008069471732596867,
-      "sad": 0.00000445692512585083,
-      "angry": 0.0003170250274706632,
-      "fearful": 8.068605552580266e-7,
-      "disgusted": 3.9276170582525083e-7,
-      "surprised": 0.04321569204330444
+      "neutral": 0.9644544720649719,
+      "happy": 0.00002051464980468154,
+      "sad": 0.000005504859927896177,
+      "angry": 0.0014184030005708337,
+      "fearful": 0.0000018863994455387,
+      "disgusted": 4.733319372007827e-7,
+      "surprised": 0.03409877419471741
     },
     "allCalibratedExpressions": {
-      "neutral": 0.9032301146971209,
-      "happy": 0.0000179321615867964,
-      "sad": 0.000009904279262068853,
-      "angry": 0.0007045001467317869,
-      "fearful": 0.0000017930236742080952,
-      "disgusted": 8.728038968788401e-7,
-      "surprised": 0.0960348828877274
+      "neutral": 0.9210098795887189,
+      "happy": 0.00004558810778968392,
+      "sad": 0.0000122330212871961,
+      "angry": 0.0031520064682984753,
+      "fearful": 0.000004191998502357726,
+      "disgusted": 0.0000010518486827147745,
+      "surprised": 0.07577504896672065
     }
   },
   {
     "id": "sample_3",
     "groundTruth": "Disgust / Aversion / Grimace",
     "faceDetected": true,
-    "detectionConfidence": 0.6894937562967297,
+    "detectionConfidence": 0.6821849886086134,
     "box": {
-      "x": 656,
-      "y": 321,
-      "width": 442,
-      "height": 429
+      "x": 658,
+      "y": 320,
+      "width": 441,
+      "height": 428
     },
     "rawTop": {
       "emotion": "angry",
-      "score": 0.9999905824661255
+      "score": 0.9999955892562866
     },
     "calibratedTop": {
       "emotion": "angry",
-      "score": 0.9900931595990878
+      "score": 0.9900971597698301
     },
     "allRawExpressions": {
-      "neutral": 0.000003569057525965036,
-      "happy": 1.3915097372974028e-11,
-      "sad": 5.145231796177541e-9,
-      "angry": 0.9999905824661255,
-      "fearful": 1.3299287886237021e-12,
-      "disgusted": 0.0000058413343140273355,
-      "surprised": 2.720190117599941e-8
+      "neutral": 0.000002609703869893565,
+      "happy": 1.4672553103056707e-11,
+      "sad": 2.331203674543758e-9,
+      "angry": 0.9999955892562866,
+      "fearful": 3.657474930557347e-12,
+      "disgusted": 0.0000018104685750586214,
+      "surprised": 3.03884526431375e-8
     },
     "allCalibratedExpressions": {
-      "neutral": 0.009901024839227694,
-      "happy": 1.3777372473008788e-11,
-      "sad": 5.0943067817537955e-9,
-      "angry": 0.9900931595990878,
-      "fearful": 1.3167657970567272e-12,
-      "disgusted": 0.000005783519613741771,
-      "surprised": 2.693266992177872e-8
+      "neutral": 0.009901015268539154,
+      "happy": 1.4527317230181599e-11,
+      "sad": 2.3081283175732328e-9,
+      "angry": 0.9900971597698301,
+      "fearful": 3.621271513174747e-12,
+      "disgusted": 0.0000017925477004865734,
+      "surprised": 3.0087653360698336e-8
     }
   },
   {
     "id": "sample_4",
     "groundTruth": "Surprise / High Alert",
     "faceDetected": true,
-    "detectionConfidence": 0.7085733352070279,
+    "detectionConfidence": 0.7063744248832448,
     "box": {
-      "x": 684,
+      "x": 685,
       "y": 329,
-      "width": 446,
-      "height": 446
+      "width": 444,
+      "height": 445
     },
     "rawTop": {
       "emotion": "surprised",
-      "score": 0.9990296363830566
+      "score": 0.9997528195381165
     },
     "calibratedTop": {
       "emotion": "surprised",
-      "score": 0.9900885322069571
+      "score": 0.9900964543547777
     },
     "allRawExpressions": {
-      "neutral": 0.000969420769251883,
-      "happy": 3.1827804036765883e-7,
-      "sad": 2.8116533545841094e-9,
-      "angry": 4.0716534499551926e-7,
-      "fearful": 2.4593964553787373e-7,
-      "disgusted": 2.062961745874503e-10,
-      "surprised": 0.9990296363830566
+      "neutral": 0.00024713677703402936,
+      "happy": 4.8210480940724665e-8,
+      "sad": 1.0216937018636685e-10,
+      "angry": 3.6032410832831374e-8,
+      "fearful": 5.008086390034805e-8,
+      "disgusted": 4.4496711870678496e-11,
+      "surprised": 0.9997528195381165
     },
     "allCalibratedExpressions": {
-      "neutral": 0.00991050211274542,
-      "happy": 3.154295191504155e-7,
-      "sad": 2.7864896510913563e-9,
-      "angry": 4.0352130118148116e-7,
-      "fearful": 2.437385376710957e-7,
-      "disgusted": 2.0444986741002243e-10,
-      "surprised": 0.9900885322069571
+      "neutral": 0.009903412473617229,
+      "happy": 4.774482783074583e-8,
+      "sad": 1.0118254151252816e-10,
+      "angry": 3.568438268963628e-8,
+      "fearful": 4.959714522402336e-8,
+      "disgusted": 4.406692913750292e-11,
+      "surprised": 0.9900964543547777
     }
   }
 ]

@@ -215,6 +215,35 @@
           <option value="">Default Camera</option>
         </select>
         <button class="btn btn-ghost" id="snapBtn" disabled>Capture Snapshot</button>
+        <button class="btn btn-ghost" id="recordBtn" disabled style="color:#FF6B6B; border-color:rgba(232,91,91,0.4);">🔴 Start Recording</button>
+        <span id="recordTimer" class="mono" style="display:none; color:#FF6B6B; font-weight:700; font-size:0.85rem; padding:6px 10px; background:rgba(232,91,91,0.15); border-radius:6px; border:1px solid rgba(232,91,91,0.3);">REC 00:00</span>
+      </div>
+
+      <!-- Recorded Session Review & Export Card -->
+      <div id="recordingResultCard" style="display:none; background:#10151E; border:1px solid var(--accent); border-radius:10px; padding:16px; margin-top:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <h4 style="color:var(--accent); font-size:1rem; margin:0;">🎬 Recorded Test Clip Ready</h4>
+          <span id="recordDurationTag" class="mono" style="font-size:0.8rem; color:var(--muted);">00:00</span>
+        </div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:14px; align-items:start;">
+          <div>
+            <video id="recordedPlayback" controls style="width:100%; border-radius:8px; background:#000; border:1px solid var(--border); max-height:220px;"></video>
+            <div style="display:flex; gap:8px; margin-top:8px;">
+              <a id="downloadVideoBtn" class="btn" style="flex:1; text-align:center; text-decoration:none; display:inline-block; padding:8px 12px; font-size:0.82rem;" download="SignalWell_Face_Recording.webm">💾 Download Video (.webm)</a>
+              <button id="downloadLogBtn" class="btn btn-ghost" style="flex:1; font-size:0.82rem; padding:8px 12px;">📊 Export Emotion JSON</button>
+            </div>
+          </div>
+          <div style="background:#0C0F14; border:1px solid var(--border); border-radius:8px; padding:12px; font-size:0.82rem;">
+            <div style="font-weight:700; color:#fff; margin-bottom:8px;">Recorded Session Analytics:</div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span style="color:var(--muted);">Dominant Emotion:</span><strong id="recDominant" style="color:var(--accent);">--</strong></div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span style="color:var(--muted);">Avg Confidence:</span><span id="recConfidence" class="mono">--</span></div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span style="color:var(--muted);">Frames Analyzed:</span><span id="recFrameCount" class="mono">--</span></div>
+            <div style="margin-top:8px; border-top:1px solid var(--border); padding-top:6px;">
+              <div style="color:var(--muted); font-size:0.75rem; margin-bottom:4px;">Emotion Timeline Breakdown:</div>
+              <div id="recBreakdownRows" style="display:flex; flex-direction:column; gap:3px;"></div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -265,6 +294,8 @@ const ctx = canvas.getContext('2d');
 const startBtn = document.getElementById('startCamBtn');
 const stopBtn = document.getElementById('stopCamBtn');
 const snapBtn = document.getElementById('snapBtn');
+const recordBtn = document.getElementById('recordBtn');
+const recordTimer = document.getElementById('recordTimer');
 const camSelect = document.getElementById('camSelect');
 const logBox = document.getElementById('logBox');
 const dampSlider = document.getElementById('dampSlider');
@@ -277,6 +308,15 @@ let modelsLoaded = false;
 let lastTime = performance.now();
 let frameCount = 0;
 let currentFps = 0;
+
+let isRecording = false;
+let mediaRecorder = null;
+let recordedChunks = [];
+let recordStartTime = 0;
+let recordTimerInterval = null;
+let sessionEmotionSamples = [];
+const recordCanvas = document.createElement('canvas');
+const recordCtx = recordCanvas.getContext('2d');
 
 function log(msg, type='ok'){
   const t = new Date().toTimeString().split(' ')[0];
@@ -365,6 +405,7 @@ startBtn.addEventListener('click', async () => {
   document.getElementById('telemetryState').textContent = 'ACTIVE';
   stopBtn.disabled = false;
   snapBtn.disabled = false;
+  recordBtn.disabled = false;
   getCameras();
 
   log(`Camera opened (${video.videoWidth}x${video.videoHeight})`, 'ok');
@@ -375,6 +416,7 @@ startBtn.addEventListener('click', async () => {
 });
 
 stopBtn.addEventListener('click', () => {
+  if(isRecording) stopRecording();
   isDetecting = false;
   if(animId) cancelAnimationFrame(animId);
   if(stream){
@@ -387,6 +429,7 @@ stopBtn.addEventListener('click', () => {
   startBtn.disabled = false;
   stopBtn.disabled = true;
   snapBtn.disabled = true;
+  recordBtn.disabled = true;
   document.getElementById('camStatus').textContent = 'Off';
   document.getElementById('camStatus').style.color = '';
   document.getElementById('telemetryState').textContent = 'IDLE';
@@ -568,6 +611,22 @@ async function detectLoop(){
         const top = ranks[0];
         document.getElementById('domEmotion').textContent = `${top[2]} ${top[0]} (${Math.round(top[1]*100)}%)`;
 
+        if(isRecording){
+          sessionEmotionSamples.push({
+            timeMs: Math.round(performance.now() - recordStartTime),
+            dominantEmotion: top[0],
+            dominantPct: Math.round(top[1] * 100),
+            confidence: confPct,
+            happy: Math.round(happy * 100),
+            neutral: Math.round(neutral * 100),
+            surprise: Math.round(surprise * 100),
+            sad: Math.round(sad * 100),
+            angry: Math.round(angry * 100),
+            fear: Math.round(fear * 100),
+            disgust: Math.round(disgust * 100)
+          });
+        }
+
         document.getElementById('p-happy').textContent = Math.round(happy*100) + '%';
         document.getElementById('b-happy').style.width = (happy*100) + '%';
         document.getElementById('p-neutral').textContent = Math.round(neutral*100) + '%';
@@ -669,7 +728,205 @@ async function detectLoop(){
       isFaceInferenceBusy = false;
     }
   }
+
+  // Draw composite frame onto recording canvas for live video capture
+  if(isRecording && video.videoWidth > 0){
+    recordCanvas.width = cw;
+    recordCanvas.height = ch;
+    recordCtx.save();
+    recordCtx.translate(cw, 0);
+    recordCtx.scale(-1, 1);
+    recordCtx.drawImage(video, 0, 0, cw, ch);
+    recordCtx.restore();
+    recordCtx.drawImage(canvas, 0, 0, cw, ch);
+
+    const recSecs = Math.floor((performance.now() - recordStartTime) / 1000);
+    const recMin = Math.floor(recSecs / 60);
+    const recRem = recSecs % 60;
+    const timeStr = `REC ${String(recMin).padStart(2,'0')}:${String(recRem).padStart(2,'0')}`;
+
+    if (Math.floor(performance.now() / 450) % 2 === 0) {
+      recordCtx.fillStyle = '#E85B5B';
+      recordCtx.beginPath();
+      recordCtx.arc(cw - 110, 24, 7, 0, Math.PI * 2);
+      recordCtx.fill();
+    }
+    recordCtx.fillStyle = '#FFFFFF';
+    recordCtx.font = 'bold 13px "JetBrains Mono", monospace';
+    recordCtx.textAlign = 'right';
+    recordCtx.fillText(timeStr, cw - 16, 29);
+  }
 }
+
+// ---- Live Recording Feature (MediaRecorder) ----
+function startRecording(){
+  if (!stream || !isDetecting) {
+    log('Please start live camera before recording.', 'warn');
+    return;
+  }
+  recordedChunks = [];
+  sessionEmotionSamples = [];
+  recordCanvas.width = canvas.width || 640;
+  recordCanvas.height = canvas.height || 480;
+
+  recordCtx.save();
+  recordCtx.translate(recordCanvas.width, 0);
+  recordCtx.scale(-1, 1);
+  recordCtx.drawImage(video, 0, 0, recordCanvas.width, recordCanvas.height);
+  recordCtx.restore();
+
+  const compositeStream = recordCanvas.captureStream(30);
+  if (stream.getAudioTracks().length > 0) {
+    compositeStream.addTrack(stream.getAudioTracks()[0]);
+  }
+
+  let mimeType = 'video/webm;codecs=vp9,opus';
+  if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm;codecs=vp8,opus';
+  if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
+  if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = '';
+
+  try {
+    mediaRecorder = mimeType ? new MediaRecorder(compositeStream, { mimeType }) : new MediaRecorder(compositeStream);
+  } catch(e) {
+    mediaRecorder = new MediaRecorder(compositeStream);
+  }
+
+  mediaRecorder.ondataavailable = (e) => {
+    if (e.data && e.data.size > 0) recordedChunks.push(e.data);
+  };
+
+  mediaRecorder.onstop = finishRecording;
+  mediaRecorder.start(200);
+  isRecording = true;
+  recordStartTime = performance.now();
+
+  recordBtn.textContent = '⏹ Stop & Save Recording';
+  recordBtn.style.background = '#E85B5B';
+  recordBtn.style.color = '#FFFFFF';
+  recordBtn.style.borderColor = '#E85B5B';
+  recordTimer.style.display = 'inline-block';
+  recordTimer.textContent = 'REC 00:00';
+
+  recordTimerInterval = setInterval(() => {
+    const elapsed = Math.floor((performance.now() - recordStartTime) / 1000);
+    const m = Math.floor(elapsed / 60);
+    const s = elapsed % 60;
+    recordTimer.textContent = `REC ${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }, 500);
+
+  const resCard = document.getElementById('recordingResultCard');
+  if (resCard) resCard.style.display = 'none';
+
+  log('🔴 Recording started — capturing live video and real-time emotion predictions…', 'warn');
+}
+
+function stopRecording(){
+  if (!isRecording) return;
+  isRecording = false;
+  clearInterval(recordTimerInterval);
+  recordTimer.style.display = 'none';
+
+  recordBtn.textContent = '🔴 Start Recording';
+  recordBtn.style.background = 'transparent';
+  recordBtn.style.color = '#FF6B6B';
+  recordBtn.style.borderColor = 'rgba(232,91,91,0.4)';
+
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+  }
+  log('Recording stopped. Compiling video with emotion metadata…', 'ok');
+}
+
+function finishRecording(){
+  const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'video/webm' });
+  const videoUrl = URL.createObjectURL(blob);
+  const totalSecs = Math.max(1, Math.round((performance.now() - recordStartTime) / 1000));
+  const m = Math.floor(totalSecs / 60);
+  const s = totalSecs % 60;
+  const durStr = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+
+  const resCard = document.getElementById('recordingResultCard');
+  const playback = document.getElementById('recordedPlayback');
+  const downloadBtn = document.getElementById('downloadVideoBtn');
+  const downloadLogBtn = document.getElementById('downloadLogBtn');
+  const recDurationTag = document.getElementById('recordDurationTag');
+  const recDominant = document.getElementById('recDominant');
+  const recConfidence = document.getElementById('recConfidence');
+  const recFrameCount = document.getElementById('recFrameCount');
+  const recBreakdownRows = document.getElementById('recBreakdownRows');
+
+  playback.src = videoUrl;
+  downloadBtn.href = videoUrl;
+  downloadBtn.download = `SignalWell_Face_Recording_${Date.now()}.webm`;
+  recDurationTag.textContent = `Duration: ${durStr} (${(blob.size / 1024 / 1024).toFixed(2)} MB)`;
+
+  const counts = { Happiness: 0, Neutral: 0, Surprise: 0, Sadness: 0, Anger: 0, Fear: 0, Disgust: 0 };
+  let confSum = 0;
+  sessionEmotionSamples.forEach(sample => {
+    const emotionKey = sample.dominantEmotion.charAt(0).toUpperCase() + sample.dominantEmotion.slice(1);
+    if(counts[emotionKey] !== undefined) counts[emotionKey]++;
+    confSum += (sample.confidence || 0);
+  });
+  const totalSamples = sessionEmotionSamples.length || 1;
+  const avgConf = Math.round(confSum / totalSamples);
+
+  let domEmotionName = 'Neutral';
+  let domCount = -1;
+  for(const [em, cnt] of Object.entries(counts)){
+    if(cnt > domCount){
+      domCount = cnt;
+      domEmotionName = em;
+    }
+  }
+
+  recDominant.textContent = `${domEmotionName} (${Math.round((domCount/totalSamples)*100)}%)`;
+  recConfidence.textContent = `${avgConf}%`;
+  recFrameCount.textContent = `${sessionEmotionSamples.length} frames`;
+
+  recBreakdownRows.innerHTML = Object.entries(counts).map(([em, cnt]) => {
+    const pct = Math.round((cnt / totalSamples) * 100);
+    const color = em === 'Happiness' ? '#5FE39A' : (em === 'Neutral' ? '#8A93A6' : '#E85B5B');
+    return `
+      <div style="display:flex; align-items:center; gap:6px; font-size:0.75rem;">
+        <span style="width:62px; color:var(--muted);">${em}:</span>
+        <div style="flex:1; height:4px; background:#1C222E; border-radius:2px; overflow:hidden;">
+          <div style="width:${pct}%; height:100%; background:${color};"></div>
+        </div>
+        <span class="mono" style="width:34px; text-align:right;">${pct}%</span>
+      </div>
+    `;
+  }).join('');
+
+  downloadLogBtn.onclick = () => {
+    const jsonStr = JSON.stringify({
+      sessionDate: new Date().toISOString(),
+      durationSeconds: totalSecs,
+      totalFrames: sessionEmotionSamples.length,
+      averageConfidence: avgConf,
+      dominantEmotion: domEmotionName,
+      emotionDistribution: counts,
+      timeline: sessionEmotionSamples
+    }, null, 2);
+    const logBlob = new Blob([jsonStr], { type: 'application/json' });
+    const logUrl = URL.createObjectURL(logBlob);
+    const a = document.createElement('a');
+    a.href = logUrl;
+    a.download = `SignalWell_Face_Emotion_Log_${Date.now()}.json`;
+    a.click();
+  };
+
+  resCard.style.display = 'block';
+  resCard.scrollIntoView({ behavior: 'smooth' });
+  log(`✓ Recording ready! Captured ${totalSecs}s of live face tracking with ${sessionEmotionSamples.length} frames analyzed.`, 'ok');
+}
+
+recordBtn.addEventListener('click', () => {
+  if(!isRecording){
+    startRecording();
+  } else {
+    stopRecording();
+  }
+});
 
 // Snapshot Capture Button
 snapBtn.addEventListener('click', () => {
