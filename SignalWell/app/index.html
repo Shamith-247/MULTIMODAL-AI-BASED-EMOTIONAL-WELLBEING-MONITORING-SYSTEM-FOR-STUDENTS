@@ -1568,13 +1568,13 @@ async function faceRenderLoop(){
         };
         const factor = Math.exp(-neutralPenalty);
 
-        let happyRaw   = (rawExp.happy    || rawExp.happiness || 0) * 1.45;
+        let happyRaw   = (rawExp.happy    || rawExp.happiness || 0) * 1.60;
         let neutralRaw = (rawExp.neutral  || 0) * factor;
         let sadRaw     = (rawExp.sad      || rawExp.sadness   || 0);
         let angryRaw   = (rawExp.angry    || rawExp.anger     || 0);
         let surpRaw    = (rawExp.surprised|| rawExp.surprise  || 0);
         let fearRaw    = (rawExp.fearful  || rawExp.fear      || 0);
-        let disgustRaw = (rawExp.disgusted|| rawExp.disgust   || 0) * 2.5; // Compensate for severe training class imbalance
+        let disgustRaw = (rawExp.disgusted|| rawExp.disgust   || 0) * 3.20; // 3.2x multiplier compensates for FER2013 class rarity
 
         // Geometric landmark analysis for subtle Happiness (AU12) and Disgust (AU9/AU10)
         if(landmarks && landmarks.positions){
@@ -1584,13 +1584,13 @@ async function faceRenderLoop(){
           const cornerAvgY = (pts[48].y + pts[54].y) / 2;
           const smileLift = (mouthCenterY - cornerAvgY) / (box.height || 1);
 
-          if(smileLift > 0.012 || mouthW > 0.43){
-            happyRaw += Math.max(0.18, smileLift * 6.5);
+          if(smileLift > 0.008 || mouthW > 0.42){
+            happyRaw += Math.max(0.28, smileLift * 8.0);
           }
 
           const lipToNose = Math.hypot(pts[33].x - pts[51].x, pts[33].y - pts[51].y) / (box.height || 1);
-          if(lipToNose < 0.065){
-            disgustRaw += 0.38 + (0.065 - lipToNose) * 8.5;
+          if(lipToNose < 0.075){
+            disgustRaw += 0.45 + (0.075 - lipToNose) * 9.5;
           }
         }
 

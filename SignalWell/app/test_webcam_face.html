@@ -206,11 +206,25 @@
       <div class="video-stage">
         <video id="testVideo" autoplay playsinline muted></video>
         <canvas id="testCanvas"></canvas>
+
+        <!-- Floating Interactive Guided Test Banner -->
+        <div id="guidedBanner" style="display:none; position:absolute; top:14px; left:50%; transform:translateX(-50%); background:rgba(12,15,20,0.94); border:1.5px solid var(--accent); border-radius:12px; padding:12px 18px; text-align:center; z-index:15; box-shadow:0 8px 28px rgba(0,0,0,0.7); max-width:92%; min-width:320px;">
+          <div style="display:flex; align-items:center; justify-content:center; gap:12px;">
+            <span id="guidedEmoji" style="font-size:2rem;">😊</span>
+            <div style="text-align:left;">
+              <div style="font-size:1rem; font-weight:700; color:#fff;" id="guidedTitle">Step 1: Smile Naturally</div>
+              <div style="font-size:0.78rem; color:var(--muted);" id="guidedSub">Raise mouth corners or show teeth</div>
+            </div>
+            <div id="guidedTimer" style="font-family:'JetBrains Mono',monospace; font-size:1.35rem; font-weight:700; color:var(--accent); margin-left:auto; background:rgba(95,227,154,0.12); padding:4px 10px; border-radius:8px;">3.5s</div>
+          </div>
+          <div id="guidedDetectionStatus" style="margin-top:8px; font-size:0.8rem; font-weight:600; color:#E5A84B; text-align:center;">Waiting for expression…</div>
+        </div>
       </div>
 
       <div class="controls-row">
         <button class="btn" id="startCamBtn">Start Live Camera</button>
         <button class="btn btn-ghost" id="stopCamBtn" disabled>Stop</button>
+        <button class="btn" id="guidedTestBtn" disabled style="background:#55C77A; color:#0A120D;">🎯 Guided 5-Emotion Test</button>
         <select class="select-cam" id="camSelect">
           <option value="">Default Camera</option>
         </select>
@@ -375,6 +389,20 @@ async function loadModels(){
   }
 }
 
+const guidedTestBtn = document.getElementById('guidedTestBtn');
+const guidedBanner = document.getElementById('guidedBanner');
+const guidedEmoji = document.getElementById('guidedEmoji');
+const guidedTitle = document.getElementById('guidedTitle');
+const guidedSub = document.getElementById('guidedSub');
+const guidedTimer = document.getElementById('guidedTimer');
+const guidedDetectionStatus = document.getElementById('guidedDetectionStatus');
+const guidedModal = document.getElementById('guidedModal');
+const guidedModalCloseBtn = document.getElementById('guidedModalCloseBtn');
+const guidedResultsList = document.getElementById('guidedResultsList');
+const guidedOverallSummary = document.getElementById('guidedOverallSummary');
+const guidedRetryBtn = document.getElementById('guidedRetryBtn');
+const guidedDoneBtn = document.getElementById('guidedDoneBtn');
+
 startBtn.addEventListener('click', async () => {
   startBtn.disabled = true;
   log('Requesting webcam access…');
@@ -387,11 +415,13 @@ startBtn.addEventListener('click', async () => {
 
   const deviceId = camSelect.value ? { exact: camSelect.value } : undefined;
   try {
+    // 640x480 resolution provides optimal 60 FPS performance and cuts CPU workload by 60%
     stream = await navigator.mediaDevices.getUserMedia({
       video: {
         deviceId: deviceId,
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
+        width: { ideal: 640 },
+        height: { ideal: 480 },
+        frameRate: { ideal: 30, max: 60 },
         facingMode: 'user'
       }
     });
@@ -410,17 +440,21 @@ startBtn.addEventListener('click', async () => {
   stopBtn.disabled = false;
   snapBtn.disabled = false;
   recordBtn.disabled = false;
+  if(guidedTestBtn) guidedTestBtn.disabled = false;
   getCameras();
 
   log(`Camera opened (${video.videoWidth}x${video.videoHeight})`, 'ok');
   document.getElementById('camRes').textContent = `${video.videoWidth}x${video.videoHeight}`;
 
   isDetecting = true;
-  detectLoop();
+  smoothBox = null;
+  targetBox = null;
+  animId = requestAnimationFrame(renderLoop);
 });
 
 stopBtn.addEventListener('click', () => {
   if(isRecording) stopRecording();
+  if(guidedState.active) stopGuidedTest(false);
   isDetecting = false;
   if(animId) cancelAnimationFrame(animId);
   if(stream){
@@ -434,6 +468,7 @@ stopBtn.addEventListener('click', () => {
   stopBtn.disabled = true;
   snapBtn.disabled = true;
   recordBtn.disabled = true;
+  if(guidedTestBtn) guidedTestBtn.disabled = true;
   document.getElementById('camStatus').textContent = 'Off';
   document.getElementById('camStatus').style.color = '';
   document.getElementById('telemetryState').textContent = 'IDLE';
@@ -441,29 +476,48 @@ stopBtn.addEventListener('click', () => {
   log('Camera stopped cleanly.');
 });
 
-// Measure average luminance across frame to identify backlighting or shadows
-function getLuminance(v){
-  const temp = document.createElement('canvas');
-  temp.width = 64; temp.height = 36;
-  const tctx = temp.getContext('2d');
-  tctx.drawImage(v, 0, 0, 64, 36);
-  const data = tctx.getImageData(0, 0, 64, 36).data;
-  let sum = 0;
-  for(let i=0; i<data.length; i+=4){
-    sum += 0.299*data[i] + 0.587*data[i+1] + 0.114*data[i+2];
-  }
-  return sum / (data.length / 4);
+// Persistent static canvas for luminance measurement (zero per-frame allocations)
+const lumCanvas = document.createElement('canvas');
+lumCanvas.width = 32;
+lumCanvas.height = 18;
+const lumCtx = lumCanvas.getContext('2d', { willReadFrequently: true });
+let lastLumCheck = 0;
+let cachedLuminance = 120;
+
+function updateLuminance(v){
+  const now = performance.now();
+  if(now - lastLumCheck < 1200) return cachedLuminance;
+  lastLumCheck = now;
+  try {
+    lumCtx.drawImage(v, 0, 0, 32, 18);
+    const data = lumCtx.getImageData(0, 0, 32, 18).data;
+    let sum = 0;
+    for(let i=0; i<data.length; i+=4){
+      sum += 0.299*data[i] + 0.587*data[i+1] + 0.114*data[i+2];
+    }
+    cachedLuminance = Math.round(sum / (data.length / 4));
+  } catch(e){}
+  return cachedLuminance;
 }
 
+// State tracking for decoupled 60 FPS lerp interpolation
 let isFaceInferenceBusy = false;
 let testEmaProbs = null;
 let lastInferenceStamp = 0;
 let inferenceDurationMs = 0;
 let consecutiveMissCount = 0;
+let lastDetectionTime = 0;
 
-async function detectLoop(){
+let targetBox = null;
+let smoothBox = null;
+let targetLandmarks = null;
+let activeEmotionRank = [ ['Neutral', 0.85, '😐'] ];
+let activeConfPct = 0;
+
+// High-speed 60 FPS Render Loop (never blocks on neural inference)
+function renderLoop(){
   if(!isDetecting) return;
-  animId = requestAnimationFrame(detectLoop);
+  animId = requestAnimationFrame(renderLoop);
 
   // FPS calculation
   frameCount++;
@@ -483,286 +537,142 @@ async function detectLoop(){
   }
 
   const cw = canvas.width, ch = canvas.height;
+  ctx.clearRect(0, 0, cw, ch);
 
-  // Luminance assessment
-  const lum = Math.round(getLuminance(video));
+  // Luminance assessment (internally throttled to 1.2s intervals)
+  const lum = updateLuminance(video);
   const lumTag = lum < 50 ? 'Too Dark (<50)' : (lum > 185 ? 'Backlit (>185)' : `Optimal (${lum})`);
   document.getElementById('lightLevel').textContent = lumTag;
 
-  // Decoupled throttle: trigger neural inference at ~12-14 Hz without blocking camera render
-  if(!isFaceInferenceBusy && (now - lastInferenceStamp >= 72)){
-    isFaceInferenceBusy = true;
-    const tStart = performance.now();
-
-    try {
-      // Primary: High-accuracy TinyFaceDetector with 320px inputSize and sensitive threshold (0.10)
-      // Multi-scale adaptation: if face was missed, boost to 416px for distant/small faces
-      const inputSize = consecutiveMissCount > 1 ? 416 : 320;
-      let full = await faceapi
-        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize, scoreThreshold: 0.10 }))
-        .withFaceLandmarks(true)
-        .withFaceExpressions();
-
-      // Dual-Engine Fallback: If TinyFace missed 2+ frames and SSD MobileNetV1 is loaded,
-      // invoke SSD MobileNetV1 for ultra-robust face capture
-      if((!full || !full.detection) && consecutiveMissCount >= 2 && faceapi.nets.ssdMobilenetv1 && faceapi.nets.ssdMobilenetv1.isLoaded){
-        full = await faceapi
-          .detectSingleFace(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.20, maxResults: 1 }))
-          .withFaceLandmarks(true)
-          .withFaceExpressions();
-      }
-
-      inferenceDurationMs = Math.round(performance.now() - tStart);
-      lastInferenceStamp = performance.now();
-      isFaceInferenceBusy = false;
-
-      ctx.clearRect(0, 0, cw, ch);
-
-      if(!full || !full.detection || full.detection.box.width < 25 || full.detection.box.height < 25){
-        consecutiveMissCount++;
-        if(consecutiveMissCount > 3){
-          document.getElementById('faceDetected').textContent = 'Searching…';
-          document.getElementById('faceDetected').style.color = '#E5A84B';
-          document.getElementById('faceConf').textContent = '--';
-
-          // Draw Center Reticle on canvas
-          const rx = cw * 0.25, ry = ch * 0.16, rw = cw * 0.5, rh = ch * 0.68;
-          ctx.save();
-          ctx.setLineDash([8, 8]);
-          ctx.lineWidth = 2;
-          ctx.strokeStyle = 'rgba(95, 227, 154, 0.35)';
-          ctx.strokeRect(rx, ry, rw, rh);
-          ctx.restore();
-
-          const bannerW = 320, bannerH = 38;
-          const bx = (cw - bannerW) / 2, by = ry + rh / 2 - 19;
-          ctx.fillStyle = 'rgba(12, 15, 20, 0.88)';
-          ctx.strokeStyle = '#5FE39A';
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          if(ctx.roundRect){ ctx.roundRect(bx, by, bannerW, bannerH, 19); } else { ctx.rect(bx, by, bannerW, bannerH); }
-          ctx.fill(); ctx.stroke();
-
-          ctx.fillStyle = '#FFFFFF';
-          ctx.font = 'bold 13px "JetBrains Mono", monospace';
-          ctx.textAlign = 'center';
-          ctx.fillText('SCANNING: Position face in center', cw / 2, by + 24);
-        }
-      } else {
-        consecutiveMissCount = 0;
-        document.getElementById('faceDetected').textContent = 'YES';
-        document.getElementById('faceDetected').style.color = '#5FE39A';
-        const confPct = Math.round((full.detection.score || 0.85) * 100);
-        document.getElementById('faceConf').textContent = confPct + '%';
-
-        const box = full.detection.box;
-        const landmarks = full.landmarks;
-        const rawExp = full.expressions || {};
-
-        // Calculate emotion probabilities with calibrated neutral dampening & geometric feature fusion
-        let happyRaw   = (rawExp.happy    || rawExp.happiness || 0) * 1.45;
-        let neutralRaw = rawExp.neutral  || 0;
-        let sadRaw     = (rawExp.sad      || rawExp.sadness   || 0);
-        let angryRaw   = (rawExp.angry    || rawExp.anger     || 0);
-        let surpRaw    = (rawExp.surprised|| rawExp.surprise  || 0);
-        let fearRaw    = (rawExp.fearful  || rawExp.fear      || 0);
-        let disgustRaw = (rawExp.disgusted|| rawExp.disgust   || 0) * 2.5; // Compensate for severe training class imbalance
-
-        // Geometric landmark analysis for subtle Happiness (AU12) and Disgust (AU9/AU10)
-        if(landmarks && landmarks.positions){
-          const pts = landmarks.positions;
-          // Mouth corners (48, 54), top lip (51), bottom lip (57), nose tip (30), subnasale (33)
-          const mouthW = Math.hypot(pts[54].x - pts[48].x, pts[54].y - pts[48].y) / (box.width || 1);
-          const mouthCenterY = (pts[51].y + pts[57].y) / 2;
-          const cornerAvgY = (pts[48].y + pts[54].y) / 2;
-          const smileLift = (mouthCenterY - cornerAvgY) / (box.height || 1);
-
-          // AU12 Smile check: mouth widened and corners elevated
-          if(smileLift > 0.012 || mouthW > 0.43){
-            happyRaw += Math.max(0.18, smileLift * 6.5);
-          }
-
-          // AU9 / AU10 Disgust sneer check: upper lip elevated toward subnasale (nose base)
-          const lipToNose = Math.hypot(pts[33].x - pts[51].x, pts[33].y - pts[51].y) / (box.height || 1);
-          if(lipToNose < 0.065){
-            disgustRaw += 0.38 + (0.065 - lipToNose) * 8.5;
-          }
-        }
-
-        const neutralPenalty = parseFloat(dampSlider.value || 0.55);
-        const factor = Math.exp(-neutralPenalty);
-        const adjustedNeutral = neutralRaw * factor;
-
-        const sum = (happyRaw + adjustedNeutral + sadRaw + angryRaw + surpRaw + fearRaw + disgustRaw) || 1;
-        const currentProbs = {
-          happy: happyRaw / sum,
-          neutral: adjustedNeutral / sum,
-          surprise: surpRaw / sum,
-          sad: sadRaw / sum,
-          angry: angryRaw / sum,
-          fear: fearRaw / sum,
-          disgust: disgustRaw / sum
-        };
-
-        // Temporal EMA smoothing
-        if(!testEmaProbs){
-          testEmaProbs = { ...currentProbs };
-        } else {
-          const alpha = 0.35;
-          for(const k of Object.keys(currentProbs)){
-            testEmaProbs[k] = alpha * currentProbs[k] + (1 - alpha) * (testEmaProbs[k] || 0);
-          }
-        }
-
-        const happy = testEmaProbs.happy;
-        const neutral = testEmaProbs.neutral;
-        const surprise = testEmaProbs.surprise;
-        const sad = testEmaProbs.sad;
-        const angry = testEmaProbs.angry;
-        const fear = testEmaProbs.fear;
-        const disgust = testEmaProbs.disgust;
-
-        // Update sidebar
-        const ranks = [
-          ['Happiness', happy, '😊'],
-          ['Neutral', neutral, '😐'],
-          ['Surprise', surprise, '😮'],
-          ['Sadness', sad, '😢'],
-          ['Anger', angry, '😠'],
-          ['Fear', fear, '😨'],
-          ['Disgust', disgust, '🤢']
-        ].sort((a,b) => b[1] - a[1]);
-
-        const top = ranks[0];
-        document.getElementById('domEmotion').textContent = `${top[2]} ${top[0]} (${Math.round(top[1]*100)}%)`;
-
-        if(isRecording){
-          sessionEmotionSamples.push({
-            timeMs: Math.round(performance.now() - recordStartTime),
-            dominantEmotion: top[0],
-            dominantPct: Math.round(top[1] * 100),
-            confidence: confPct,
-            happy: Math.round(happy * 100),
-            neutral: Math.round(neutral * 100),
-            surprise: Math.round(surprise * 100),
-            sad: Math.round(sad * 100),
-            angry: Math.round(angry * 100),
-            fear: Math.round(fear * 100),
-            disgust: Math.round(disgust * 100)
-          });
-        }
-
-        document.getElementById('p-happy').textContent = Math.round(happy*100) + '%';
-        document.getElementById('b-happy').style.width = (happy*100) + '%';
-        if(document.getElementById('p-disgust')){
-          document.getElementById('p-disgust').textContent = Math.round(disgust*100) + '%';
-          document.getElementById('b-disgust').style.width = (disgust*100) + '%';
-        }
-        document.getElementById('p-neutral').textContent = Math.round(neutral*100) + '%';
-        document.getElementById('b-neutral').style.width = (neutral*100) + '%';
-        document.getElementById('p-surprise').textContent = Math.round(surprise*100) + '%';
-        document.getElementById('b-surprise').style.width = (surprise*100) + '%';
-        document.getElementById('p-sad').textContent = Math.round(sad*100) + '%';
-        document.getElementById('b-sad').style.width = (sad*100) + '%';
-        document.getElementById('p-angry').textContent = Math.round(angry*100) + '%';
-        document.getElementById('b-angry').style.width = (angry*100) + '%';
-        if(document.getElementById('p-fear')){
-          document.getElementById('p-fear').textContent = Math.round(fear*100) + '%';
-          document.getElementById('b-fear').style.width = (fear*100) + '%';
-        }
-
-        // Mirrored coordinate calculation to align with mirrored selfie video
-        const bx = cw - (box.x + box.width);
-        const by = box.y;
-        const bw = box.width;
-        const bh = box.height;
-
-        // 1. Draw Corner Tracking Brackets
-        const corner = Math.min(28, bw * 0.22);
-        ctx.lineWidth = 4;
-        ctx.strokeStyle = '#5FE39A';
-        ctx.lineCap = 'round';
-        
-        ctx.beginPath();
-        ctx.moveTo(bx, by + corner); ctx.lineTo(bx, by); ctx.lineTo(bx + corner, by);
-        ctx.moveTo(bx + bw - corner, by); ctx.lineTo(bx + bw, by); ctx.lineTo(bx + bw, by + corner);
-        ctx.moveTo(bx, by + bh - corner); ctx.lineTo(bx, by + bh); ctx.lineTo(bx + corner, by + bh);
-        ctx.moveTo(bx + bw - corner, by + bh); ctx.lineTo(bx + bw, by + bh); ctx.lineTo(bx + bw, by + bh - corner);
-        ctx.stroke();
-
-        // Face box fill
-        ctx.fillStyle = 'rgba(95, 227, 154, 0.08)';
-        ctx.fillRect(bx, by, bw, bh);
-
-        // 2. Facial Landmark Points
-        if(landmarks && landmarks.positions){
-          ctx.fillStyle = '#5FE39A';
-          const pts = [36, 39, 42, 45, 30, 48, 54, 8];
-          for(const idx of pts){
-            const pt = landmarks.positions[idx];
-            if(pt){
-              const lx = cw - pt.x;
-              const ly = pt.y;
-              ctx.beginPath();
-              ctx.arc(lx, ly, 3.2, 0, Math.PI * 2);
-              ctx.fill();
-            }
-          }
-        }
-
-        // 3. Floating Output Badge (un-mirrored text, positioned directly above face)
-        const badgeW = Math.max(220, bw * 0.95);
-        const badgeH = 46;
-        const badgeX = Math.max(10, Math.min(cw - badgeW - 10, bx + (bw - badgeW) / 2));
-        const badgeY = Math.max(10, by - badgeH - 10);
-
-        ctx.fillStyle = 'rgba(12, 15, 20, 0.92)';
-        ctx.strokeStyle = '#5FE39A';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        if(ctx.roundRect){ ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 10); } else { ctx.rect(badgeX, badgeY, badgeW, badgeH); }
-        ctx.fill(); ctx.stroke();
-
-        ctx.textAlign = 'left';
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 15px "Plus Jakarta Sans", sans-serif';
-        ctx.fillText(`${top[2]} ${top[0].toUpperCase()} (${Math.round(top[1]*100)}%)`, badgeX + 12, badgeY + 20);
-
-        ctx.fillStyle = '#5FE39A';
-        ctx.font = '600 11px "JetBrains Mono", monospace';
-        ctx.fillText(`CONF: ${confPct}% • ${inferenceDurationMs}ms`, badgeX + 12, badgeY + 36);
-
-        // 4. Mini Probability Pill under Chin
-        const subPillW = Math.max(180, bw * 0.85);
-        const subPillH = 22;
-        const subPillX = Math.max(10, Math.min(cw - subPillW - 10, bx + (bw - subPillW) / 2));
-        const subPillY = Math.min(ch - subPillH - 8, by + bh + 8);
-        ctx.fillStyle = 'rgba(12, 15, 20, 0.88)';
-        ctx.strokeStyle = 'rgba(95, 227, 154, 0.4)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        if(ctx.roundRect){ ctx.roundRect(subPillX, subPillY, subPillW, subPillH, 6); } else { ctx.rect(subPillX, subPillY, subPillW, subPillH); }
-        ctx.fill(); ctx.stroke();
-
-        ctx.fillStyle = '#C7CCD6';
-        ctx.font = '10.5px "JetBrains Mono", monospace';
-        ctx.textAlign = 'center';
-        const subText = ranks.slice(0, 3).map(r => `${r[0].slice(0,3)}:${Math.round(r[1]*100)}%`).join('  ');
-        ctx.fillText(subText, subPillX + subPillW / 2, subPillY + 15);
-
-        // 5. Watermark Status in Top-Left Corner
-        ctx.textAlign = 'left';
-        ctx.fillStyle = '#5FE39A';
-        ctx.font = '600 11px "JetBrains Mono", monospace';
-        ctx.fillText(`● TRACKING ACTIVE • ${cw}x${ch} • ${currentFps} FPS • ${inferenceDurationMs}ms`, 14, 22);
-      }
-    } catch(err) {
-      console.warn('Inference error:', err);
-      isFaceInferenceBusy = false;
-    }
+  // Trigger neural inference asynchronously at ~14-16 Hz
+  if(!isFaceInferenceBusy && (now - lastInferenceStamp >= 65)){
+    runAsyncInference(video, cw, ch);
   }
 
-  // Draw composite frame onto recording canvas for live video capture
+  // Draw smooth tracking overlay if detection was active within the last 450ms (prevents flicker on dropped frames)
+  if(targetBox && (now - lastDetectionTime < 450)){
+    if(!smoothBox){
+      smoothBox = { ...targetBox };
+    } else {
+      const lerpFactor = 0.45;
+      smoothBox.x += (targetBox.x - smoothBox.x) * lerpFactor;
+      smoothBox.y += (targetBox.y - smoothBox.y) * lerpFactor;
+      smoothBox.width += (targetBox.width - smoothBox.width) * lerpFactor;
+      smoothBox.height += (targetBox.height - smoothBox.height) * lerpFactor;
+    }
+
+    // Mirrored coordinates to match selfie video
+    const bx = cw - (smoothBox.x + smoothBox.width);
+    const by = smoothBox.y;
+    const bw = smoothBox.width;
+    const bh = smoothBox.height;
+
+    // 1. High-Tech Corner Tracking Reticles
+    const corner = Math.min(28, bw * 0.22);
+    ctx.lineWidth = 3.5;
+    ctx.strokeStyle = '#5FE39A';
+    ctx.lineCap = 'round';
+    
+    ctx.beginPath();
+    ctx.moveTo(bx, by + corner); ctx.lineTo(bx, by); ctx.lineTo(bx + corner, by);
+    ctx.moveTo(bx + bw - corner, by); ctx.lineTo(bx + bw, by); ctx.lineTo(bx + bw, by + corner);
+    ctx.moveTo(bx, by + bh - corner); ctx.lineTo(bx, by + bh); ctx.lineTo(bx + corner, by + bh);
+    ctx.moveTo(bx + bw - corner, by + bh); ctx.lineTo(bx + bw, by + bh); ctx.lineTo(bx + bw, by + bh - corner);
+    ctx.stroke();
+
+    // Subtle face box fill
+    ctx.fillStyle = 'rgba(95, 227, 154, 0.08)';
+    ctx.fillRect(bx, by, bw, bh);
+
+    // 2. Facial Landmark Points
+    if(targetLandmarks && targetLandmarks.positions){
+      ctx.fillStyle = '#5FE39A';
+      const pts = [36, 39, 42, 45, 30, 48, 54, 8];
+      for(const idx of pts){
+        const pt = targetLandmarks.positions[idx];
+        if(pt){
+          const lx = cw - pt.x;
+          const ly = pt.y;
+          ctx.beginPath();
+          ctx.arc(lx, ly, 3.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    // 3. Floating Output Badge (un-mirrored text, centered above face)
+    const top = activeEmotionRank[0] || ['Neutral', 0.85, '😐'];
+    const badgeW = Math.max(220, bw * 0.95);
+    const badgeH = 46;
+    const badgeX = Math.max(10, Math.min(cw - badgeW - 10, bx + (bw - badgeW) / 2));
+    const badgeY = Math.max(10, by - badgeH - 10);
+
+    ctx.fillStyle = 'rgba(12, 15, 20, 0.92)';
+    ctx.strokeStyle = '#5FE39A';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    if(ctx.roundRect){ ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 10); } else { ctx.rect(badgeX, badgeY, badgeW, badgeH); }
+    ctx.fill(); ctx.stroke();
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 15px "Plus Jakarta Sans", sans-serif';
+    ctx.fillText(`${top[2]} ${top[0].toUpperCase()} (${Math.round(top[1]*100)}%)`, badgeX + 12, badgeY + 20);
+
+    ctx.fillStyle = '#5FE39A';
+    ctx.font = '600 11px "JetBrains Mono", monospace';
+    ctx.fillText(`CONF: ${activeConfPct}% • ${inferenceDurationMs}ms`, badgeX + 12, badgeY + 36);
+
+    // 4. Mini Probability Pill under Chin
+    const subPillW = Math.max(180, bw * 0.85);
+    const subPillH = 22;
+    const subPillX = Math.max(10, Math.min(cw - subPillW - 10, bx + (bw - subPillW) / 2));
+    const subPillY = Math.min(ch - subPillH - 8, by + bh + 8);
+    ctx.fillStyle = 'rgba(12, 15, 20, 0.88)';
+    ctx.strokeStyle = 'rgba(95, 227, 154, 0.4)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    if(ctx.roundRect){ ctx.roundRect(subPillX, subPillY, subPillW, subPillH, 6); } else { ctx.rect(subPillX, subPillY, subPillW, subPillH); }
+    ctx.fill(); ctx.stroke();
+
+    ctx.fillStyle = '#C7CCD6';
+    ctx.font = '10.5px "JetBrains Mono", monospace';
+    ctx.textAlign = 'center';
+    const subText = activeEmotionRank.slice(0, 3).map(r => `${r[0].slice(0,3)}:${Math.round(r[1]*100)}%`).join('  ');
+    ctx.fillText(subText, subPillX + subPillW / 2, subPillY + 15);
+
+    // 5. Watermark Status in Top-Left Corner
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#5FE39A';
+    ctx.font = '600 11px "JetBrains Mono", monospace';
+    ctx.fillText(`● TRACKING ACTIVE • ${cw}x${ch} • ${currentFps} FPS • ${inferenceDurationMs}ms`, 14, 22);
+
+  } else if(now - lastDetectionTime >= 500) {
+    // Face not locked — draw scanning dashed guide
+    const rx = cw * 0.25, ry = ch * 0.16, rw = cw * 0.5, rh = ch * 0.68;
+    ctx.save();
+    ctx.setLineDash([8, 8]);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(95, 227, 154, 0.35)';
+    ctx.strokeRect(rx, ry, rw, rh);
+    ctx.restore();
+
+    const bannerW = 320, bannerH = 38;
+    const bx = (cw - bannerW) / 2, by = ry + rh / 2 - 19;
+    ctx.fillStyle = 'rgba(12, 15, 20, 0.88)';
+    ctx.strokeStyle = '#5FE39A';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    if(ctx.roundRect){ ctx.roundRect(bx, by, bannerW, bannerH, 19); } else { ctx.rect(bx, by, bannerW, bannerH); }
+    ctx.fill(); ctx.stroke();
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 13px "JetBrains Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('SCANNING: Position face in center', cw / 2, by + 24);
+  }
+
+  // Live video clip recording compositing
   if(isRecording && video.videoWidth > 0){
     recordCanvas.width = cw;
     recordCanvas.height = ch;
@@ -791,6 +701,175 @@ async function detectLoop(){
   }
 }
 
+// Background Neural Inference Runner (runs async at ~15 FPS without slowing down render loop)
+async function runAsyncInference(video, cw, ch){
+  if(isFaceInferenceBusy || !isDetecting) return;
+  isFaceInferenceBusy = true;
+  const tStart = performance.now();
+
+  try {
+    const inputSize = consecutiveMissCount > 1 ? 416 : 320;
+    let full = await faceapi
+      .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize, scoreThreshold: 0.10 }))
+      .withFaceLandmarks(true)
+      .withFaceExpressions();
+
+    // Dual-Engine Fallback: invoke SSD MobileNetV1 if face was lost for 2+ frames
+    if((!full || !full.detection) && consecutiveMissCount >= 2 && faceapi.nets.ssdMobilenetv1 && faceapi.nets.ssdMobilenetv1.isLoaded){
+      full = await faceapi
+        .detectSingleFace(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.20, maxResults: 1 }))
+        .withFaceLandmarks(true)
+        .withFaceExpressions();
+    }
+
+    inferenceDurationMs = Math.round(performance.now() - tStart);
+    lastInferenceStamp = performance.now();
+
+    if(!full || !full.detection || full.detection.box.width < 25 || full.detection.box.height < 25){
+      consecutiveMissCount++;
+      if(consecutiveMissCount > 3){
+        document.getElementById('faceDetected').textContent = 'Searching…';
+        document.getElementById('faceDetected').style.color = '#E5A84B';
+        document.getElementById('faceConf').textContent = '--';
+      }
+    } else {
+      consecutiveMissCount = 0;
+      lastDetectionTime = performance.now();
+      document.getElementById('faceDetected').textContent = 'YES';
+      document.getElementById('faceDetected').style.color = '#5FE39A';
+      activeConfPct = Math.round((full.detection.score || 0.85) * 100);
+      document.getElementById('faceConf').textContent = activeConfPct + '%';
+
+      targetBox = full.detection.box;
+      targetLandmarks = full.landmarks;
+
+      const rawExp = full.expressions || {};
+
+      // Raw logits with calibrated class re-balancing
+      let happyRaw   = (rawExp.happy    || rawExp.happiness || 0) * 1.60;
+      let neutralRaw = rawExp.neutral  || 0;
+      let sadRaw     = (rawExp.sad      || rawExp.sadness   || 0);
+      let angryRaw   = (rawExp.angry    || rawExp.anger     || 0);
+      let surpRaw    = (rawExp.surprised|| rawExp.surprise  || 0);
+      let fearRaw    = (rawExp.fearful  || rawExp.fear      || 0);
+      let disgustRaw = (rawExp.disgusted|| rawExp.disgust   || 0) * 3.20; // 3.2x multiplier compensates for FER2013 class rarity
+
+      // Geometric FACS Feature Fusion: AU12 (Smile) & AU9/AU10 (Disgust sneer)
+      if(targetLandmarks && targetLandmarks.positions){
+        const pts = targetLandmarks.positions;
+        const mouthW = Math.hypot(pts[54].x - pts[48].x, pts[54].y - pts[48].y) / (targetBox.width || 1);
+        const mouthCenterY = (pts[51].y + pts[57].y) / 2;
+        const cornerAvgY = (pts[48].y + pts[54].y) / 2;
+        const smileLift = (mouthCenterY - cornerAvgY) / (targetBox.height || 1);
+
+        // AU12 Smile check: lip corners elevated relative to center or mouth widened
+        if(smileLift > 0.008 || mouthW > 0.42){
+          happyRaw += Math.max(0.28, smileLift * 8.0);
+        }
+
+        // AU9/AU10 Disgust sneer check: distance between subnasale (33) and top lip (51)
+        const lipToNose = Math.hypot(pts[33].x - pts[51].x, pts[33].y - pts[51].y) / (targetBox.height || 1);
+        if(lipToNose < 0.075){
+          disgustRaw += 0.45 + (0.075 - lipToNose) * 9.5;
+        }
+      }
+
+      // Neutral penalty suppression
+      const neutralPenalty = parseFloat(dampSlider.value || 1.35);
+      const factor = Math.exp(-neutralPenalty);
+      const adjustedNeutral = neutralRaw * factor;
+
+      const sum = (happyRaw + adjustedNeutral + sadRaw + angryRaw + surpRaw + fearRaw + disgustRaw) || 1;
+      const currentProbs = {
+        happy: happyRaw / sum,
+        neutral: adjustedNeutral / sum,
+        surprise: surpRaw / sum,
+        sad: sadRaw / sum,
+        angry: angryRaw / sum,
+        fear: fearRaw / sum,
+        disgust: disgustRaw / sum
+      };
+
+      // Temporal EMA smoothing (alpha = 0.35)
+      if(!testEmaProbs){
+        testEmaProbs = { ...currentProbs };
+      } else {
+        const alpha = 0.35;
+        for(const k of Object.keys(currentProbs)){
+          testEmaProbs[k] = alpha * currentProbs[k] + (1 - alpha) * (testEmaProbs[k] || 0);
+        }
+      }
+
+      const happy = testEmaProbs.happy;
+      const neutral = testEmaProbs.neutral;
+      const surprise = testEmaProbs.surprise;
+      const sad = testEmaProbs.sad;
+      const angry = testEmaProbs.angry;
+      const fear = testEmaProbs.fear;
+      const disgust = testEmaProbs.disgust;
+
+      activeEmotionRank = [
+        ['Happiness', happy, '😊'],
+        ['Neutral', neutral, '😐'],
+        ['Surprise', surprise, '😮'],
+        ['Sadness', sad, '😢'],
+        ['Anger', angry, '😠'],
+        ['Fear', fear, '😨'],
+        ['Disgust', disgust, '🤢']
+      ].sort((a,b) => b[1] - a[1]);
+
+      const top = activeEmotionRank[0];
+      document.getElementById('domEmotion').textContent = `${top[2]} ${top[0]} (${Math.round(top[1]*100)}%)`;
+
+      // Log frame to session samples if recording
+      if(isRecording){
+        sessionEmotionSamples.push({
+          timeMs: Math.round(performance.now() - recordStartTime),
+          dominantEmotion: top[0],
+          dominantPct: Math.round(top[1] * 100),
+          confidence: activeConfPct,
+          happy: Math.round(happy * 100),
+          neutral: Math.round(neutral * 100),
+          surprise: Math.round(surprise * 100),
+          sad: Math.round(sad * 100),
+          angry: Math.round(angry * 100),
+          fear: Math.round(fear * 100),
+          disgust: Math.round(disgust * 100)
+        });
+      }
+
+      // Update probability progress bars in sidebar
+      document.getElementById('p-happy').textContent = Math.round(happy*100) + '%';
+      document.getElementById('b-happy').style.width = (happy*100) + '%';
+      if(document.getElementById('p-disgust')){
+        document.getElementById('p-disgust').textContent = Math.round(disgust*100) + '%';
+        document.getElementById('b-disgust').style.width = (disgust*100) + '%';
+      }
+      document.getElementById('p-neutral').textContent = Math.round(neutral*100) + '%';
+      document.getElementById('b-neutral').style.width = (neutral*100) + '%';
+      document.getElementById('p-surprise').textContent = Math.round(surprise*100) + '%';
+      document.getElementById('b-surprise').style.width = (surprise*100) + '%';
+      document.getElementById('p-sad').textContent = Math.round(sad*100) + '%';
+      document.getElementById('b-sad').style.width = (sad*100) + '%';
+      document.getElementById('p-angry').textContent = Math.round(angry*100) + '%';
+      document.getElementById('b-angry').style.width = (angry*100) + '%';
+      if(document.getElementById('p-fear')){
+        document.getElementById('p-fear').textContent = Math.round(fear*100) + '%';
+        document.getElementById('b-fear').style.width = (fear*100) + '%';
+      }
+
+      // Guided Test Evaluation (if active)
+      if(guidedState.active){
+        evalGuidedFrame(testEmaProbs, top);
+      }
+    }
+  } catch(err) {
+    console.warn('Inference error:', err);
+  } finally {
+    isFaceInferenceBusy = false;
+  }
+}
+
 // ---- Live Recording Feature (MediaRecorder) ----
 function startRecording(){
   if (!stream || !isDetecting) {
@@ -809,12 +888,13 @@ function startRecording(){
   recordCtx.restore();
 
   const compositeStream = recordCanvas.captureStream(30);
-  if (stream.getAudioTracks().length > 0) {
+  const hasAudio = stream.getAudioTracks().length > 0;
+  if (hasAudio) {
     compositeStream.addTrack(stream.getAudioTracks()[0]);
   }
 
-  let mimeType = 'video/webm;codecs=vp9,opus';
-  if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm;codecs=vp8,opus';
+  // Safe codec selection: avoid opus codec string if no audio track exists
+  let mimeType = hasAudio ? 'video/webm;codecs=vp8,opus' : 'video/webm;codecs=vp8';
   if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
   if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = '';
 
@@ -918,7 +998,7 @@ function finishRecording(){
 
   recBreakdownRows.innerHTML = Object.entries(counts).map(([em, cnt]) => {
     const pct = Math.round((cnt / totalSamples) * 100);
-    const color = em === 'Happiness' ? '#5FE39A' : (em === 'Neutral' ? '#8A93A6' : '#E85B5B');
+    const color = em === 'Happiness' ? '#5FE39A' : (em === 'Neutral' ? '#8A93A6' : (em === 'Disgust' ? '#55C77A' : '#E85B5B'));
     return `
       <div style="display:flex; align-items:center; gap:6px; font-size:0.75rem;">
         <span style="width:62px; color:var(--muted);">${em}:</span>
@@ -948,10 +1028,13 @@ function finishRecording(){
     a.click();
   };
 
-  resCard.style.display = 'block';
-  resCard.scrollIntoView({ behavior: 'smooth' });
+  // Unhide results card and scroll smoothly into view
+  if(resCard){
+    resCard.style.display = 'block';
+    resCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
 
-  // Also populate and open the prominent full-screen Results Modal
+  // Also populate and open the full-screen Results Modal
   const modal = document.getElementById('resultsModal');
   const modalVideo = document.getElementById('modalVideoPlayback');
   const modalDownloadVideoBtn = document.getElementById('modalDownloadVideoBtn');
@@ -1000,6 +1083,198 @@ recordBtn.addEventListener('click', () => {
   }
 });
 
+/* ---------------- 🎯 GUIDED 5-EMOTION TEST SUITE ---------------- */
+const GUIDED_STEPS = [
+  {
+    key: 'neutral',
+    label: 'Neutral Baseline',
+    emoji: '😐',
+    sub: 'Relax face, look forward with mouth resting',
+    durationSec: 3.5,
+    threshold: 0.38,
+    targetName: 'Neutral'
+  },
+  {
+    key: 'happy',
+    label: 'Happiness (AU12)',
+    emoji: '😊',
+    sub: 'Smile naturally! Raise mouth corners or show teeth',
+    durationSec: 3.5,
+    threshold: 0.35,
+    targetName: 'Happiness'
+  },
+  {
+    key: 'disgust',
+    label: 'Disgust (AU9/10)',
+    emoji: '🤢',
+    sub: 'Wrinkle your nose & curl upper lip upward (sneer)',
+    durationSec: 3.5,
+    threshold: 0.28,
+    targetName: 'Disgust'
+  },
+  {
+    key: 'surprise',
+    label: 'Surprise (AU1/2/26)',
+    emoji: '😮',
+    sub: 'Open your eyes wide and drop your jaw',
+    durationSec: 3.5,
+    threshold: 0.35,
+    targetName: 'Surprise'
+  },
+  {
+    key: 'sad',
+    label: 'Sadness (AU1/15)',
+    emoji: '😢',
+    sub: 'Lower your mouth corners and let cheeks rest flat',
+    durationSec: 3.5,
+    threshold: 0.26,
+    targetName: 'Sadness'
+  }
+];
+
+let guidedState = {
+  active: false,
+  stepIdx: 0,
+  stepStartTime: 0,
+  stepTimerInterval: null,
+  results: [],
+  stepMaxPct: 0,
+  stepDominantSeen: ''
+};
+
+function startGuidedTest(){
+  if(!stream || !isDetecting){
+    log('Please start live camera before launching the guided test.', 'warn');
+    return;
+  }
+  guidedState.active = true;
+  guidedState.stepIdx = 0;
+  guidedState.results = [];
+  guidedBanner.style.display = 'block';
+
+  // Auto-start recording so the user gets a full recorded video of their test
+  if(!isRecording){
+    startRecording();
+  }
+
+  runGuidedStep(0);
+}
+
+function stopGuidedTest(completed=true){
+  guidedState.active = false;
+  clearInterval(guidedState.stepTimerInterval);
+  guidedBanner.style.display = 'none';
+
+  if(completed){
+    if(isRecording) stopRecording();
+    showGuidedScorecard();
+  }
+}
+
+function runGuidedStep(idx){
+  if(idx >= GUIDED_STEPS.length){
+    stopGuidedTest(true);
+    return;
+  }
+
+  guidedState.stepIdx = idx;
+  const step = GUIDED_STEPS[idx];
+  guidedState.stepStartTime = performance.now();
+  guidedState.stepMaxPct = 0;
+  guidedState.stepDominantSeen = '';
+
+  guidedEmoji.textContent = step.emoji;
+  guidedTitle.textContent = `Step ${idx+1}/5: ${step.label}`;
+  guidedSub.textContent = step.sub;
+  guidedTimer.textContent = `${step.durationSec}s`;
+  guidedDetectionStatus.textContent = 'Waiting for expression…';
+  guidedDetectionStatus.style.color = '#E5A84B';
+
+  const durationMs = step.durationSec * 1000;
+  clearInterval(guidedState.stepTimerInterval);
+  guidedState.stepTimerInterval = setInterval(() => {
+    const elapsed = performance.now() - guidedState.stepStartTime;
+    const remaining = Math.max(0, (durationMs - elapsed) / 1000);
+    guidedTimer.textContent = `${remaining.toFixed(1)}s`;
+
+    if(remaining <= 0){
+      clearInterval(guidedState.stepTimerInterval);
+      // Record step result
+      const passed = guidedState.stepMaxPct >= Math.round(step.threshold * 100);
+      guidedState.results.push({
+        step: step,
+        peakPct: guidedState.stepMaxPct,
+        passed: passed,
+        dominantSeen: guidedState.stepDominantSeen || 'None'
+      });
+      // Advance to next step
+      runGuidedStep(idx + 1);
+    }
+  }, 100);
+}
+
+function evalGuidedFrame(probs, topEmotion){
+  const step = GUIDED_STEPS[guidedState.stepIdx];
+  if(!step) return;
+
+  const targetProb = probs[step.key] || 0;
+  const targetPct = Math.round(targetProb * 100);
+  if(targetPct > guidedState.stepMaxPct){
+    guidedState.stepMaxPct = targetPct;
+  }
+  guidedState.stepDominantSeen = topEmotion[0];
+
+  if(targetPct >= Math.round(step.threshold * 100)){
+    guidedDetectionStatus.textContent = `✅ Triggered: ${step.targetName} (${targetPct}%)`;
+    guidedDetectionStatus.style.color = '#5FE39A';
+  } else {
+    guidedDetectionStatus.textContent = `Target: ${step.targetName} (${targetPct}% / ${Math.round(step.threshold*100)}% required)`;
+    guidedDetectionStatus.style.color = '#E5A84B';
+  }
+}
+
+function showGuidedScorecard(){
+  guidedResultsList.innerHTML = guidedState.results.map(r => {
+    const badgeColor = r.passed ? '#5FE39A' : '#E85B5B';
+    const badgeText = r.passed ? '✓ PASSED' : '⚠️ LOW CONFIDENCE';
+    return `
+      <div style="background:#0C0F14; border:1px solid ${r.passed ? 'rgba(95,227,154,0.35)' : 'rgba(232,91,91,0.35)'}; border-radius:10px; padding:12px; display:flex; justify-content:space-between; align-items:center;">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span style="font-size:1.6rem;">${r.step.emoji}</span>
+          <div>
+            <div style="font-size:0.95rem; font-weight:700; color:#fff;">${r.step.targetName}</div>
+            <div style="font-size:0.75rem; color:var(--muted);">Peak Score: <strong style="color:${badgeColor}; font-family:'JetBrains Mono';">${r.peakPct}%</strong> (Required: ${Math.round(r.step.threshold*100)}%)</div>
+          </div>
+        </div>
+        <div style="padding:4px 10px; border-radius:6px; font-size:0.75rem; font-weight:700; font-family:'JetBrains Mono'; background:${r.passed ? 'rgba(95,227,154,0.15)' : 'rgba(232,91,91,0.15)'}; color:${badgeColor}; border:1px solid ${badgeColor};">
+          ${badgeText}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  const passCount = guidedState.results.filter(r => r.passed).length;
+  guidedOverallSummary.textContent = `${passCount}/5 Expressions Successfully Verified`;
+  guidedOverallSummary.style.color = passCount >= 4 ? '#5FE39A' : '#E5A84B';
+  guidedModal.style.display = 'flex';
+}
+
+if(guidedTestBtn){
+  guidedTestBtn.addEventListener('click', startGuidedTest);
+}
+if(guidedModalCloseBtn){
+  guidedModalCloseBtn.addEventListener('click', () => { guidedModal.style.display = 'none'; });
+}
+if(guidedDoneBtn){
+  guidedDoneBtn.addEventListener('click', () => { guidedModal.style.display = 'none'; });
+}
+if(guidedRetryBtn){
+  guidedRetryBtn.addEventListener('click', () => {
+    guidedModal.style.display = 'none';
+    startGuidedTest();
+  });
+}
+
 // Upload and analyze an existing recorded video file
 const uploadVideoBtn = document.getElementById('uploadVideoBtn');
 const videoFileInput = document.getElementById('videoFileInput');
@@ -1035,7 +1310,9 @@ if(uploadVideoBtn && videoFileInput){
     // Start recording the evaluation loop so a composite clip is produced
     startRecording();
     isDetecting = true;
-    detectLoop();
+    smoothBox = null;
+    targetBox = null;
+    animId = requestAnimationFrame(renderLoop);
 
     video.onended = () => {
       log('Video evaluation finished! Generating results report…', 'ok');
@@ -1122,6 +1399,38 @@ getCameras();
         <div style="font-size:0.82rem; font-weight:600; color:#fff; margin-bottom:8px;">Emotion Distribution Across Recording:</div>
         <div id="modalBreakdownRows" style="display:flex; flex-direction:column; gap:6px;"></div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Guided Emotion Test Scorecard Modal -->
+<div id="guidedModal" style="display:none; position:fixed; inset:0; z-index:1000; background:rgba(8,11,16,0.90); backdrop-filter:blur(6px); align-items:center; justify-content:center; padding:20px;">
+  <div style="background:#131822; border:1.5px solid var(--accent); border-radius:14px; max-width:680px; width:100%; max-height:92vh; overflow-y:auto; padding:24px; box-shadow:0 25px 60px rgba(0,0,0,0.85);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; border-bottom:1px solid var(--border); padding-bottom:12px;">
+      <div>
+        <h2 style="font-size:1.3rem; color:#fff; margin:0 0 4px 0;">🎯 Guided Emotion Test Scorecard</h2>
+        <span id="guidedOverallSummary" class="mono" style="font-size:0.82rem; color:var(--muted);">Testing routine complete</span>
+      </div>
+      <button id="guidedModalCloseBtn" style="background:transparent; border:none; color:var(--muted); font-size:1.4rem; cursor:pointer; padding:4px 8px;">✕</button>
+    </div>
+
+    <div id="guidedResultsList" style="display:flex; flex-direction:column; gap:10px; margin-bottom:18px;">
+      <!-- Populated via JS -->
+    </div>
+
+    <div style="background:#0C0F14; border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:18px; font-size:0.82rem;">
+      <strong style="color:var(--accent);">💡 Tips for Accurate Feature Expression:</strong>
+      <ul style="margin-top:6px; margin-left:18px; color:var(--muted); line-height:1.6;">
+        <li><strong style="color:#EDE7DA;">Happy (AU12):</strong> A natural wide smile, raising lip corners upwards towards your cheekbones.</li>
+        <li><strong style="color:#EDE7DA;">Disgust (AU9/10):</strong> Scrunch/wrinkle your nose upwards and raise your upper lip as if smelling something rotten.</li>
+        <li><strong style="color:#EDE7DA;">Surprise (AU1/2/26):</strong> Open both eyes wide and slightly drop your jaw.</li>
+        <li><strong style="color:#EDE7DA;">Sadness (AU1/15):</strong> Let lips droop down at the corners and relax facial tension.</li>
+      </ul>
+    </div>
+
+    <div style="display:flex; gap:10px;">
+      <button id="guidedRetryBtn" class="btn" style="flex:1;">🔄 Retest Expressions</button>
+      <button id="guidedDoneBtn" class="btn btn-ghost" style="flex:1;">Done</button>
     </div>
   </div>
 </div>
