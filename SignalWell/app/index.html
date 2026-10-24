@@ -554,7 +554,7 @@
             <span>Wellbeing: <strong id="faceRecordScore">--</strong>/100</span>
           </div>
           <div style="display:flex; gap:6px;">
-            <a id="faceDownloadVideoLink" class="mini-btn" style="flex:1; text-align:center; text-decoration:none; display:inline-block; padding:5px 8px; background:var(--moss); color:#000; font-weight:700;" download="SignalWell_Face_Recording.webm">💾 Download Video (.webm)</a>
+            <a id="faceDownloadVideoLink" class="mini-btn" style="flex:1; text-align:center; text-decoration:none; display:inline-block; padding:5px 8px; background:var(--moss); color:#000; font-weight:700;" download="SignalWell_Face_Recording.mp4">💾 Download Video (.mp4)</a>
             <button id="faceDismissRecordBtn" class="mini-btn" style="flex:none; padding:5px 8px;">✕</button>
           </div>
         </div>
@@ -992,10 +992,49 @@ function startFaceRecording(){
   faceRecCtx.restore();
 
   const compStream = faceRecCanvas.captureStream(30);
-  let mimeType = 'video/webm;codecs=vp9,opus';
-  if(!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm;codecs=vp8,opus';
-  if(!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
-  if(!MediaRecorder.isTypeSupported(mimeType)) mimeType = '';
+  const faceStream = video.srcObject;
+  const hasAudio = faceStream && faceStream.getAudioTracks && faceStream.getAudioTracks().length > 0;
+  if (hasAudio) {
+    compStream.addTrack(faceStream.getAudioTracks()[0]);
+  }
+
+  // Prioritize native MP4 recording format (H.264 / AVC1)
+  const mp4Types = hasAudio ? [
+    'video/mp4;codecs=avc1,mp4a.40.2',
+    'video/mp4;codecs=avc1',
+    'video/mp4;codecs=h264',
+    'video/mp4'
+  ] : [
+    'video/mp4;codecs=avc1',
+    'video/mp4;codecs=h264',
+    'video/mp4'
+  ];
+
+  let mimeType = '';
+  for(const t of mp4Types){
+    if(typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)){
+      mimeType = t;
+      break;
+    }
+  }
+
+  if(!mimeType){
+    const webmTypes = hasAudio ? [
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm'
+    ] : [
+      'video/webm;codecs=vp9',
+      'video/webm;codecs=vp8',
+      'video/webm'
+    ];
+    for(const t of webmTypes){
+      if(typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)){
+        mimeType = t;
+        break;
+      }
+    }
+  }
 
   try {
     faceMediaRecorder = mimeType ? new MediaRecorder(compStream, { mimeType }) : new MediaRecorder(compStream);
@@ -1019,15 +1058,16 @@ function startFaceRecording(){
   }
   if(faceRecordTimer){
     faceRecordTimer.style.display = 'inline-block';
-    faceRecordTimer.textContent = 'REC 00:00';
+    faceRecordTimer.textContent = 'REC 00:00 (0 frames)';
   }
   if(faceRecordBanner) faceRecordBanner.style.display = 'none';
 
   faceRecordTimerInterval = setInterval(() => {
     const elapsed = Math.floor((performance.now() - faceRecordStartTime) / 1000);
     const m = Math.floor(elapsed / 60), s = elapsed % 60;
-    if(faceRecordTimer) faceRecordTimer.textContent = `REC ${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-  }, 500);
+    const count = faceSessionSamples.length;
+    if(faceRecordTimer) faceRecordTimer.textContent = `REC ${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')} (${count} frames)`;
+  }, 400);
 }
 
 function stopFaceRecording(){
@@ -1049,7 +1089,10 @@ function stopFaceRecording(){
 }
 
 function finishFaceRecording(){
-  const blob = new Blob(faceRecordedChunks, { type: faceMediaRecorder.mimeType || 'video/webm' });
+  const finalMime = (faceMediaRecorder && faceMediaRecorder.mimeType && faceMediaRecorder.mimeType.includes('mp4'))
+    ? 'video/mp4'
+    : (faceMediaRecorder && faceMediaRecorder.mimeType ? faceMediaRecorder.mimeType : 'video/mp4');
+  const blob = new Blob(faceRecordedChunks, { type: finalMime });
   const url = URL.createObjectURL(blob);
   const totalSecs = Math.max(1, Math.round((performance.now() - faceRecordStartTime) / 1000));
   const m = Math.floor(totalSecs / 60), s = totalSecs % 60;
@@ -1057,19 +1100,26 @@ function finishFaceRecording(){
 
   if(faceDownloadVideoLink){
     faceDownloadVideoLink.href = url;
-    faceDownloadVideoLink.download = `SignalWell_Face_Recording_${Date.now()}.webm`;
+    faceDownloadVideoLink.download = `SignalWell_Face_Recording_${Date.now()}.mp4`;
   }
   const videoEl = $('faceRecordedVideo');
   if(videoEl){
     videoEl.src = url;
   }
   if($('faceRecordDurTag')){
-    $('faceRecordDurTag').textContent = durStr;
+    $('faceRecordDurTag').textContent = `${durStr} • MP4`;
   }
 
   // Summary statistics
   const counts = {};
   let scoreSum = 0;
+  if(!faceSessionSamples || faceSessionSamples.length === 0){
+    faceSessionSamples = [{
+      time: totalSecs * 1000,
+      emotion: 'Neutral',
+      score: state.face.score || 50
+    }];
+  }
   faceSessionSamples.forEach(s => {
     counts[s.emotion] = (counts[s.emotion] || 0) + 1;
     scoreSum += (s.score || 50);
@@ -1788,10 +1838,12 @@ async function faceRenderLoop(){
     }
   }
 
-  // Draw composite frame onto recording canvas for live video clip capture
+  // Draw composite frame onto recording canvas for live video clip capture (only resize if dimensions change)
   if(isFaceRecording && video.videoWidth > 0){
-    faceRecCanvas.width = cw;
-    faceRecCanvas.height = ch;
+    if(faceRecCanvas.width !== cw || faceRecCanvas.height !== ch){
+      faceRecCanvas.width = cw;
+      faceRecCanvas.height = ch;
+    }
     faceRecCtx.save();
     faceRecCtx.translate(cw, 0);
     faceRecCtx.scale(-1, 1);

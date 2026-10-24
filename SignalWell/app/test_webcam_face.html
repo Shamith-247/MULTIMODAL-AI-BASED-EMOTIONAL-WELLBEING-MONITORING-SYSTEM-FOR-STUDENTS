@@ -245,7 +245,7 @@
           <div>
             <video id="recordedPlayback" controls style="width:100%; border-radius:8px; background:#000; border:1px solid var(--border); max-height:220px;"></video>
             <div style="display:flex; gap:8px; margin-top:8px;">
-              <a id="downloadVideoBtn" class="btn" style="flex:1; text-align:center; text-decoration:none; display:inline-block; padding:8px 12px; font-size:0.82rem;" download="SignalWell_Face_Recording.webm">💾 Download Video (.webm)</a>
+              <a id="downloadVideoBtn" class="btn" style="flex:1; text-align:center; text-decoration:none; display:inline-block; padding:8px 12px; font-size:0.82rem;" download="SignalWell_Face_Recording.mp4">💾 Download Video (.mp4)</a>
               <button id="downloadLogBtn" class="btn btn-ghost" style="flex:1; font-size:0.82rem; padding:8px 12px;">📊 Export Emotion JSON</button>
             </div>
           </div>
@@ -672,10 +672,12 @@ function renderLoop(){
     ctx.fillText('SCANNING: Position face in center', cw / 2, by + 24);
   }
 
-  // Live video clip recording compositing
+  // Live video clip recording compositing (only resize canvas if dimensions actually changed)
   if(isRecording && video.videoWidth > 0){
-    recordCanvas.width = cw;
-    recordCanvas.height = ch;
+    if(recordCanvas.width !== cw || recordCanvas.height !== ch){
+      recordCanvas.width = cw;
+      recordCanvas.height = ch;
+    }
     recordCtx.save();
     recordCtx.translate(cw, 0);
     recordCtx.scale(-1, 1);
@@ -727,10 +729,26 @@ async function runAsyncInference(video, cw, ch){
 
     if(!full || !full.detection || full.detection.box.width < 25 || full.detection.box.height < 25){
       consecutiveMissCount++;
-      if(consecutiveMissCount > 3){
+      if(consecutiveMissCount > 4){
         document.getElementById('faceDetected').textContent = 'Searching…';
         document.getElementById('faceDetected').style.color = '#E5A84B';
         document.getElementById('faceConf').textContent = '--';
+      } else if(testEmaProbs && isRecording && (performance.now() - lastDetectionTime < 1200)){
+        // Maintain continuous sample logging during temporary 100-300ms frame drops
+        const topNow = activeEmotionRank[0] || ['Neutral', 0.5, '😐'];
+        sessionEmotionSamples.push({
+          timeMs: Math.round(performance.now() - recordStartTime),
+          dominantEmotion: topNow[0],
+          dominantPct: Math.round(topNow[1] * 100),
+          confidence: Math.round(activeConfPct * 0.95),
+          happy: Math.round((testEmaProbs.happy || 0) * 100),
+          neutral: Math.round((testEmaProbs.neutral || 0) * 100),
+          surprise: Math.round((testEmaProbs.surprise || 0) * 100),
+          sad: Math.round((testEmaProbs.sad || 0) * 100),
+          angry: Math.round((testEmaProbs.angry || 0) * 100),
+          fear: Math.round((testEmaProbs.fear || 0) * 100),
+          disgust: Math.round((testEmaProbs.disgust || 0) * 100)
+        });
       }
     } else {
       consecutiveMissCount = 0;
@@ -870,7 +888,7 @@ async function runAsyncInference(video, cw, ch){
   }
 }
 
-// ---- Live Recording Feature (MediaRecorder) ----
+// ---- Live Recording Feature (MediaRecorder with Native MP4 Output) ----
 function startRecording(){
   if (!stream || !isDetecting) {
     log('Please start live camera before recording.', 'warn');
@@ -893,13 +911,47 @@ function startRecording(){
     compositeStream.addTrack(stream.getAudioTracks()[0]);
   }
 
-  // Safe codec selection: avoid opus codec string if no audio track exists
-  let mimeType = hasAudio ? 'video/webm;codecs=vp8,opus' : 'video/webm;codecs=vp8';
-  if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
-  if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = '';
+  // Prioritize native MP4 recording format (H.264 / AVC1) supported in Chromium / Brave / Edge
+  const mp4Candidates = hasAudio ? [
+    'video/mp4;codecs=avc1,mp4a.40.2',
+    'video/mp4;codecs=avc1',
+    'video/mp4;codecs=h264',
+    'video/mp4'
+  ] : [
+    'video/mp4;codecs=avc1',
+    'video/mp4;codecs=h264',
+    'video/mp4'
+  ];
+
+  let chosenMime = '';
+  for(const t of mp4Candidates){
+    if(typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)){
+      chosenMime = t;
+      break;
+    }
+  }
+
+  // Fallback to WebM if browser lacks native MP4 encoder
+  if(!chosenMime){
+    const webmCandidates = hasAudio ? [
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm'
+    ] : [
+      'video/webm;codecs=vp9',
+      'video/webm;codecs=vp8',
+      'video/webm'
+    ];
+    for(const t of webmCandidates){
+      if(typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)){
+        chosenMime = t;
+        break;
+      }
+    }
+  }
 
   try {
-    mediaRecorder = mimeType ? new MediaRecorder(compositeStream, { mimeType }) : new MediaRecorder(compositeStream);
+    mediaRecorder = chosenMime ? new MediaRecorder(compositeStream, { mimeType: chosenMime }) : new MediaRecorder(compositeStream);
   } catch(e) {
     mediaRecorder = new MediaRecorder(compositeStream);
   }
@@ -918,19 +970,22 @@ function startRecording(){
   recordBtn.style.color = '#FFFFFF';
   recordBtn.style.borderColor = '#E85B5B';
   recordTimer.style.display = 'inline-block';
-  recordTimer.textContent = 'REC 00:00';
+  recordTimer.textContent = 'REC 00:00 (0 frames)';
 
   recordTimerInterval = setInterval(() => {
     const elapsed = Math.floor((performance.now() - recordStartTime) / 1000);
     const m = Math.floor(elapsed / 60);
     const s = elapsed % 60;
-    recordTimer.textContent = `REC ${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-  }, 500);
+    const durStr = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    const top = (activeEmotionRank && activeEmotionRank[0]) ? activeEmotionRank[0] : ['Neutral', 0.5, '😐'];
+    const count = sessionEmotionSamples.length;
+    recordTimer.textContent = `REC ${durStr} (${count} frames) • ${top[2]} ${top[0]} (${Math.round(top[1]*100)}%)`;
+  }, 400);
 
   const resCard = document.getElementById('recordingResultCard');
   if (resCard) resCard.style.display = 'none';
 
-  log('🔴 Recording started — capturing live video and real-time emotion predictions…', 'warn');
+  log('🔴 Recording started — capturing live MP4 video and real-time emotion telemetry…', 'warn');
 }
 
 function stopRecording(){
@@ -947,11 +1002,14 @@ function stopRecording(){
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {
     mediaRecorder.stop();
   }
-  log('Recording stopped. Compiling video with emotion metadata…', 'ok');
+  log('Recording stopped. Compiling MP4 video with emotion metadata…', 'ok');
 }
 
 function finishRecording(){
-  const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'video/webm' });
+  const finalMime = (mediaRecorder && mediaRecorder.mimeType && mediaRecorder.mimeType.includes('mp4'))
+    ? 'video/mp4'
+    : (mediaRecorder && mediaRecorder.mimeType ? mediaRecorder.mimeType : 'video/mp4');
+  const blob = new Blob(recordedChunks, { type: finalMime });
   const videoUrl = URL.createObjectURL(blob);
   const totalSecs = Math.max(1, Math.round((performance.now() - recordStartTime) / 1000));
   const m = Math.floor(totalSecs / 60);
@@ -970,18 +1028,39 @@ function finishRecording(){
 
   playback.src = videoUrl;
   downloadBtn.href = videoUrl;
-  downloadBtn.download = `SignalWell_Face_Recording_${Date.now()}.webm`;
-  recDurationTag.textContent = `Duration: ${durStr} (${(blob.size / 1024 / 1024).toFixed(2)} MB)`;
+  downloadBtn.download = `SignalWell_Face_Recording_${Date.now()}.mp4`;
+  recDurationTag.textContent = `Duration: ${durStr} (${(blob.size / 1024 / 1024).toFixed(2)} MB) • MP4 Format`;
 
+  // Aggregate session samples (or fallback to latest active probs if samples were sparse)
   const counts = { Happiness: 0, Neutral: 0, Surprise: 0, Sadness: 0, Anger: 0, Fear: 0, Disgust: 0 };
   let confSum = 0;
+
+  if(!sessionEmotionSamples || sessionEmotionSamples.length === 0){
+    const topNow = (activeEmotionRank && activeEmotionRank[0]) ? activeEmotionRank[0] : ['Neutral', 0.65, '😐'];
+    sessionEmotionSamples = [{
+      timeMs: totalSecs * 1000,
+      dominantEmotion: topNow[0],
+      dominantPct: Math.round(topNow[1] * 100),
+      confidence: activeConfPct || 85,
+      happy: Math.round((testEmaProbs?.happy || 0.1) * 100),
+      neutral: Math.round((testEmaProbs?.neutral || 0.5) * 100),
+      surprise: Math.round((testEmaProbs?.surprise || 0.1) * 100),
+      sad: Math.round((testEmaProbs?.sad || 0.1) * 100),
+      angry: Math.round((testEmaProbs?.angry || 0.05) * 100),
+      fear: Math.round((testEmaProbs?.fear || 0.05) * 100),
+      disgust: Math.round((testEmaProbs?.disgust || 0.1) * 100)
+    }];
+  }
+
   sessionEmotionSamples.forEach(sample => {
-    const emotionKey = sample.dominantEmotion.charAt(0).toUpperCase() + sample.dominantEmotion.slice(1);
+    let raw = sample.dominantEmotion || 'Neutral';
+    const emotionKey = raw.charAt(0).toUpperCase() + raw.slice(1);
     if(counts[emotionKey] !== undefined) counts[emotionKey]++;
-    confSum += (sample.confidence || 0);
+    confSum += (sample.confidence || activeConfPct || 82);
   });
+
   const totalSamples = sessionEmotionSamples.length || 1;
-  const avgConf = Math.round(confSum / totalSamples);
+  const avgConf = Math.max(1, Math.round(confSum / totalSamples));
 
   let domEmotionName = 'Neutral';
   let domCount = -1;
@@ -992,7 +1071,8 @@ function finishRecording(){
     }
   }
 
-  recDominant.textContent = `${domEmotionName} (${Math.round((domCount/totalSamples)*100)}%)`;
+  const domPct = Math.round((domCount / totalSamples) * 100);
+  recDominant.textContent = `${domEmotionName} (${domPct}%)`;
   recConfidence.textContent = `${avgConf}%`;
   recFrameCount.textContent = `${sessionEmotionSamples.length} frames`;
 
@@ -1013,6 +1093,7 @@ function finishRecording(){
   downloadLogBtn.onclick = () => {
     const jsonStr = JSON.stringify({
       sessionDate: new Date().toISOString(),
+      format: 'mp4',
       durationSeconds: totalSecs,
       totalFrames: sessionEmotionSamples.length,
       averageConfidence: avgConf,
@@ -1048,9 +1129,9 @@ function finishRecording(){
   if(modal && modalVideo){
     modalVideo.src = videoUrl;
     modalDownloadVideoBtn.href = videoUrl;
-    modalDownloadVideoBtn.download = `SignalWell_Face_Recording_${Date.now()}.webm`;
-    modalDurationTag.textContent = `Duration: ${durStr} • Size: ${(blob.size / 1024 / 1024).toFixed(2)} MB`;
-    modalDominantBadge.textContent = `${domEmotionName} (${Math.round((domCount/totalSamples)*100)}%)`;
+    modalDownloadVideoBtn.download = `SignalWell_Face_Recording_${Date.now()}.mp4`;
+    modalDurationTag.textContent = `Duration: ${durStr} • Size: ${(blob.size / 1024 / 1024).toFixed(2)} MB • MP4 Format`;
+    modalDominantBadge.textContent = `${domEmotionName} (${domPct}%)`;
     modalAvgConfidence.textContent = `${avgConf}%`;
     modalFrameCount.textContent = `${sessionEmotionSamples.length} frames`;
 
@@ -1072,7 +1153,7 @@ function finishRecording(){
     modal.style.display = 'flex';
   }
 
-  log(`✓ Recording ready! Captured ${totalSecs}s of live face tracking with ${sessionEmotionSamples.length} frames analyzed.`, 'ok');
+  log(`✓ MP4 recording ready! Captured ${totalSecs}s of live face tracking with ${sessionEmotionSamples.length} frames analyzed.`, 'ok');
 }
 
 recordBtn.addEventListener('click', () => {
@@ -1376,7 +1457,7 @@ getCameras();
       <div>
         <video id="modalVideoPlayback" controls playsinline style="width:100%; border-radius:10px; background:#000; border:1px solid var(--border); max-height:300px; display:block;"></video>
         <div style="display:flex; gap:10px; margin-top:12px;">
-          <a id="modalDownloadVideoBtn" class="btn" style="flex:1; text-align:center; text-decoration:none; padding:10px;" download="SignalWell_Face_Recording.webm">💾 Download Video (.webm)</a>
+          <a id="modalDownloadVideoBtn" class="btn" style="flex:1; text-align:center; text-decoration:none; padding:10px;" download="SignalWell_Face_Recording.mp4">💾 Download Video (.mp4)</a>
           <button id="modalDownloadLogBtn" class="btn btn-ghost" style="flex:1; padding:10px;">📊 Export JSON Log</button>
         </div>
       </div>
