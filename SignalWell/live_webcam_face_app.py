@@ -238,23 +238,90 @@ def predict_emotion(face_bgr, model_ctx):
         return {k: v / total for k, v in raw_probs.items()}
 
 # ---- 6. Visualization & On-Screen Display ----
+def check_face_in_guide(face_box, guide_box, iou_thresh=0.40):
+    """
+    Evaluates whether the detected face is centered using:
+    1. Coordinate format normalization (xywh -> xyxy)
+    2. Center-point boundary check (face midpoint inside guide box)
+    3. Relaxed Intersection-over-Union (IoU >= iou_thresh)
+    """
+    fx, fy, fw, fh = face_box
+    fx1, fy1, fx2, fy2 = fx, fy, fx + fw, fy + fh
+    gx1, gy1, gx2, gy2 = guide_box
+
+    # 1. Center-Point Check: does face midpoint fall within guide boundaries?
+    fcx = (fx1 + fx2) / 2.0
+    fcy = (fy1 + fy2) / 2.0
+    center_inside = (gx1 <= fcx <= gx2) and (gy1 <= fcy <= gy2)
+
+    # 2. Relaxed IoU Check
+    inter_x1 = max(fx1, gx1)
+    inter_y1 = max(fy1, gy1)
+    inter_x2 = min(fx2, gx2)
+    inter_y2 = min(fy2, gy2)
+
+    inter_w = max(0, inter_x2 - inter_x1)
+    inter_h = max(0, inter_y2 - inter_y1)
+    inter_area = inter_w * inter_h
+
+    face_area = (fx2 - fx1) * (fy2 - fy1)
+    guide_area = (gx2 - gx1) * (gy2 - gy1)
+    union_area = face_area + guide_area - inter_area
+    iou = inter_area / union_area if union_area > 0 else 0.0
+
+    # Scale check: face height should be at least 30% of guide box height
+    valid_scale = (fy2 - fy1) >= 0.30 * (gy2 - gy1)
+
+    is_centered = (center_inside or iou >= iou_thresh) and valid_scale
+    return is_centered, iou, (int(fcx), int(fcy))
+
+
 def draw_hud(frame, faces, emotions_list, fps):
     h, w = frame.shape[:2]
+
+    # Guide box coordinates (center 50% width, 68% height)
+    gw = int(w * 0.50)
+    gh = int(h * 0.68)
+    gx1 = (w - gw) // 2
+    gy1 = (h - gh) // 2
+    gx2 = gx1 + gw
+    gy2 = gy1 + gh
+    guide_box = (gx1, gy1, gx2, gy2)
 
     # Top status bar
     cv2.rectangle(frame, (0, 0), (w, 40), (20, 24, 32), -1)
     status_text = f"SignalWell Live Monitor | FPS: {fps:.1f} | Faces: {len(faces)}"
     cv2.putText(frame, status_text, (16, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (237, 231, 218), 2)
 
+    # Determine if any face is centered
+    is_centered = False
+    if len(faces) > 0:
+        is_centered, iou_val, _ = check_face_in_guide(faces[0], guide_box, iou_thresh=0.40)
+
+    if not is_centered or len(faces) == 0:
+        # Draw dashed-style static center guide box in amber
+        amber_color = (75, 168, 229)
+        dash_len = 16
+        for x in range(gx1, gx2, dash_len * 2):
+            cv2.line(frame, (x, gy1), (min(x + dash_len, gx2), gy1), amber_color, 2)
+            cv2.line(frame, (x, gy2), (min(x + dash_len, gx2), gy2), amber_color, 2)
+        for y in range(gy1, gy2, dash_len * 2):
+            cv2.line(frame, (gx1, y), (gx1, min(y + dash_len, gy2)), amber_color, 2)
+            cv2.line(frame, (gx2, y), (gx2, min(y + dash_len, gy2)), amber_color, 2)
+
+        banner = "SCANNING: Position face in center"
+        text_size = cv2.getTextSize(banner, cv2.FONT_HERSHEY_SIMPLEX, 0.65, 2)[0]
+        bx = (w - text_size[0]) // 2
+        by = gy1 + gh // 2
+        cv2.rectangle(frame, (bx - 12, by - 24), (bx + text_size[0] + 12, by + 10), (12, 15, 20), -1)
+        cv2.rectangle(frame, (bx - 12, by - 24), (bx + text_size[0] + 12, by + 10), amber_color, 1)
+        cv2.putText(frame, banner, (bx, by - 2), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (237, 231, 218), 2)
+
     if len(faces) == 0:
-        # Clear "No face detected" prompt
-        cv2.putText(frame, "No face detected - center your face in camera lighting",
-                    (w // 2 - 270, h // 2), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 165, 255), 2)
         return frame
 
     # Draw each detected face
     for (x, y, fw, fh), probs in zip(faces, emotions_list):
-        # Corner-reticle bounding box
         moss_color = (119, 163, 143)  # BGR #8FA377
         corner_len = int(min(fw, fh) * 0.2)
         thick = 3
