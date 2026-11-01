@@ -29,3 +29,6 @@ venv/
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints
+
+# Test outputs
+evaluated_*.jpg
