@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SignalWell — Integrated YOLO Face Detection & Emotion Recognition</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  :root {
+    --bg: #0C0F14;
+    --card: #151A22;
+    --card-hover: #1C222C;
+    --border: #232B39;
+    --text: #EDE7DA;
+    --muted: #8A93A6;
+    --accent: #5FE39A;
+    --accent-dim: rgba(95, 227, 154, 0.12);
+    --cyan: #38BDF8;
+    --amber: #E5A84B;
+    --danger: #EF4444;
+    --violet: #A855F7;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    padding: 24px;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1280px; margin: 0 auto; }
+
+  /* Header */
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 16px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 18px;
+  }
+  .header-left h1 {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .badge-model {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    background: var(--accent-dim);
+    color: var(--accent);
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(95,227,154,0.3);
+  }
+  .header-left p { color: var(--muted); font-size: 0.90rem; margin-top: 4px; }
+
+  /* Navigation Pills */
+  nav.nav-pills { display: flex; gap: 8px; flex-wrap: wrap; }
+  nav.nav-pills a {
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s;
+  }
+  nav.nav-pills a:hover, nav.nav-pills a.active {
+    background: var(--accent);
+    color: #0C120E;
+    border-color: var(--accent);
+  }
+
+  /* Mode Switcher Tabs */
+  .tabs-bar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 12px;
+  }
+  .tab-btn {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid transparent;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 0.92rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .tab-btn:hover { color: var(--text); background: var(--card); }
+  .tab-btn.active {
+    background: var(--card);
+    color: var(--accent);
+    border-color: var(--border);
+  }
+
+  /* Status Banner */
+  .status-bar {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 18px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.88rem;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .status-pill {
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-weight: 700;
+  }
+  .status-active { background: rgba(95, 227, 154, 0.15); color: #5FE39A; border: 1px solid #5FE39A; }
+  .status-warn { background: rgba(229, 168, 75, 0.15); color: #E5A84B; border: 1px solid #E5A84B; }
+  .status-danger { background: rgba(239, 68, 68, 0.15); color: #EF4444; border: 1px solid #EF4444; }
+
+  /* Main Grid */
+  .grid-layout {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    gap: 20px;
+  }
+  @media(max-width: 980px) { .grid-layout { grid-template-columns: 1fr; } }
+
+  /* Stage Card */
+  .stage-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .video-stage {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16/9;
+    background: #000;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  video#webcamVideo {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    transform: scaleX(-1); /* Natural mirror feel */
+  }
+  canvas#overlayCanvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+  }
+
+  /* Session Progress Bar */
+  .session-prog-container {
+    background: #0B0E14;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .session-prog-head {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.82rem;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .prog-track {
+    width: 100%;
+    height: 8px;
+    background: #1B2230;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .prog-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--accent);
+    transition: width 0.3s ease;
+  }
+
+  /* Control Buttons */
+  .controls-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  button.btn {
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 0.86rem;
+    padding: 10px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  button.btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+  button.btn-primary { background: var(--accent); color: #0C120E; }
+  button.btn-danger { background: var(--danger); color: #fff; }
+  button.btn-ghost {
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  button.btn-ghost:hover { border-color: var(--accent); }
+  button.btn-active {
+    background: var(--cyan);
+    color: #0C120E;
+    border-color: var(--cyan);
+  }
+
+  /* Sidebar */
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .panel-title {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* Crop Preview Inset */
+  .crop-preview-box {
+    width: 100%;
+    height: 170px;
+    background: #0B0E14;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .crop-preview-box img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+  .crop-empty { color: var(--muted); font-size: 0.84rem; }
+
+  /* Probability Spectrum Rows */
+  .spectrum-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.82rem;
+    margin-bottom: 8px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .spectrum-label { width: 75px; color: var(--muted); }
+  .spectrum-track {
+    flex: 1;
+    height: 7px;
+    background: #1A212E;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 0 10px;
+  }
+  .spectrum-fill { height: 100%; border-radius: 4px; transition: width 0.2s ease; }
+  .spectrum-pct { width: 45px; text-align: right; color: #fff; }
+
+  /* Telemetry Table */
+  .telemetry-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    font-size: 0.82rem;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .telemetry-row:last-child { border-bottom: none; }
+  .telemetry-label { color: var(--muted); }
+  .telemetry-val { color: var(--accent); font-weight: 600; }
+
+  /* Sample Photos View */
+  .samples-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(560px, 1fr));
+    gap: 20px;
+  }
+  @media(max-width: 600px) { .samples-grid { grid-template-columns: 1fr; } }
+
+  .sample-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .sample-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+  }
+  .sample-title { font-weight: 700; font-size: 1.05rem; color: #fff; }
+  .sample-stage {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16/9;
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .sample-stage img { width: 100%; height: 100%; object-fit: contain; }
+  .sample-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  /* Evaluation Modal */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    backdrop-filter: blur(8px);
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .modal-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    max-width: 900px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .modal-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 14px;
+  }
+  .modal-head h2 { font-size: 1.4rem; color: #fff; }
+  .close-btn {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 1.5rem;
+    cursor: pointer;
+  }
+  .close-btn:hover { color: #fff; }
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+  }
+  .kpi-box {
+    background: #0B0E14;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+  }
+  .kpi-box .lbl { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; }
+  .kpi-box .val { font-size: 1.4rem; font-weight: 800; color: #fff; font-family: 'JetBrains Mono', monospace; margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="header-left">
+      <h1>
+        SignalWell — Integrated YOLO & Emotion Recognition
+        <span class="badge-model">YOLO11n + InceptionResnetV1 (v6)</span>
+      </h1>
+      <p>Continuous real-time facial expression tracking and session evaluation powered by PyTorch & YOLO backend.</p>
+    </div>
+    <nav class="nav-pills">
+      <a href="test_yolo_emotion_web.html" class="active">⚡ Integrated YOLO Pipeline</a>
+      <a href="test_sample_photos.html">📸 Sample Photos Benchmark</a>
+      <a href="test_standalone_face.html">📷 Standalone Face Tool</a>
+      <a href="index.html">📊 Full Console</a>
+    </nav>
+  </header>
+
+  <!-- Mode Selector Tabs -->
+  <div class="tabs-bar">
+    <button class="tab-btn active" id="tabLiveBtn" onclick="switchTab('live')">📹 Live Webcam Stream</button>
+    <button class="tab-btn" id="tabSampleBtn" onclick="switchTab('samples')">🖼️ 4-Sample Photos Benchmark</button>
+  </div>
+
+  <!-- Status Bar -->
+  <div class="status-bar" id="statusBar">
+    <div>Status: <span class="status-pill status-warn" id="serverStatusBadge">Connecting to Backend…</span></div>
+    <div>Backend: <span style="color:#5FE39A;font-weight:700" id="backendEngine">YOLO11n-face + face_model_v6_best.pt</span></div>
+    <div>Target: <span style="color:#fff" id="sessionTargetDisplay">60s (1 MIN)</span></div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- TAB 1: LIVE WEBCAM PIPELINE -->
+  <!-- ============================================================ -->
+  <div id="tabLiveContent">
+    <div class="grid-layout">
+      <!-- Main Stage -->
+      <div class="stage-card">
+        <div class="video-stage">
+          <video id="webcamVideo" autoplay playsinline muted></video>
+          <canvas id="overlayCanvas"></canvas>
+        </div>
+
+        <!-- Session Progress Bar -->
+        <div class="session-prog-container">
+          <div class="session-prog-head">
+            <span id="sessionTimerText">SESSION: READY — Press [START SESSION]</span>
+            <span id="sessionSamplesText">VALID PREDICTIONS: 0</span>
+          </div>
+          <div class="prog-track">
+            <div class="prog-fill" id="sessionProgFill"></div>
+          </div>
+        </div>
+
+        <!-- Control Buttons -->
+        <div class="controls-row">
+          <button class="btn btn-primary" id="startCamBtn" onclick="startWebcam()">▶ Start Camera</button>
+          <button class="btn btn-danger" id="stopCamBtn" onclick="stopWebcam()" disabled>⏹ Stop Camera</button>
+          
+          <div style="width:1px;height:28px;background:var(--border);margin:0 4px;"></div>
+          
+          <button class="btn btn-active" id="dur1mBtn" onclick="setDuration(60)">1 MIN</button>
+          <button class="btn btn-ghost" id="dur2mBtn" onclick="setDuration(120)">2 MIN</button>
+          
+          <div style="width:1px;height:28px;background:var(--border);margin:0 4px;"></div>
+          
+          <button class="btn btn-primary" id="sessionBtn" onclick="toggleSession()" disabled>▶ Start Session</button>
+          <button class="btn btn-ghost" id="resetBtn" onclick="resetSession()">↺ Reset</button>
+          <button class="btn btn-ghost" id="viewReportBtn" onclick="openReportModal()" style="display:none">📊 View Report</button>
+        </div>
+      </div>
+
+      <!-- Right Sidebar -->
+      <div class="sidebar">
+        <!-- Crop Preview Inset -->
+        <div class="panel">
+          <div class="panel-title">
+            <span>Extracted YOLO Crop</span>
+            <span style="font-size:0.75rem;color:var(--muted)">160x160</span>
+          </div>
+          <div class="crop-preview-box" id="cropBox">
+            <span class="crop-empty" id="cropEmptyLabel">No Face Detected</span>
+            <img id="cropThumbImg" style="display:none" alt="Face Crop" />
+          </div>
+        </div>
+
+        <!-- Realtime Probability Spectrum -->
+        <div class="panel">
+          <div class="panel-title">Live 7-Emotion Probabilities</div>
+          <div id="spectrumContainer">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+
+        <!-- Latency & FPS Telemetry -->
+        <div class="panel">
+          <div class="panel-title">Inference Telemetry</div>
+          <div class="telemetry-row">
+            <span class="telemetry-label">YOLO Face Detection:</span>
+            <span class="telemetry-val" id="detLatText">-- ms</span>
+          </div>
+          <div class="telemetry-row">
+            <span class="telemetry-label">Emotion Classification:</span>
+            <span class="telemetry-val" id="clsLatText">-- ms</span>
+          </div>
+          <div class="telemetry-row">
+            <span class="telemetry-label">Total Roundtrip:</span>
+            <span class="telemetry-val" id="totLatText">-- ms</span>
+          </div>
+          <div class="telemetry-row">
+            <span class="telemetry-label">Client Frame Rate:</span>
+            <span class="telemetry-val" id="fpsText">-- FPS</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- TAB 2: SAMPLE PHOTOS BENCHMARK -->
+  <!-- ============================================================ -->
+  <div id="tabSampleContent" style="display:none">
+    <div style="margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
+      <p style="color:var(--muted); font-size:0.92rem;">Test YOLO11n face detection and `face_model_v6_best.pt` directly on the 4 authentic student photos.</p>
+      <button class="btn btn-primary" onclick="benchmarkAllSamples()">⚡ Benchmark All 4 Photos</button>
+    </div>
+    <div class="samples-grid" id="sampleCardsContainer">
+      <!-- Generated by JS -->
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- EVALUATION REPORT MODAL -->
+<!-- ============================================================ -->
+<div class="modal-overlay" id="reportModal">
+  <div class="modal-card">
+    <div class="modal-head">
+      <div>
+        <h2 id="modalSessionTitle">Session Evaluation Report</h2>
+        <small style="color:var(--muted)" id="modalSessionSub">Duration: 60s | Total Valid Samples: 142</small>
+      </div>
+      <button class="close-btn" onclick="closeReportModal()">&times;</button>
+    </div>
+
+    <!-- KPI Row -->
+    <div class="kpi-row">
+      <div class="kpi-box">
+        <div class="lbl">Dominant Emotion</div>
+        <div class="val" id="kpiDominant" style="color:#5FE39A">--</div>
+      </div>
+      <div class="kpi-box">
+        <div class="lbl">Average Confidence</div>
+        <div class="val" id="kpiAvgConf">--%</div>
+      </div>
+      <div class="kpi-box">
+        <div class="lbl">Face Tracking Rate</div>
+        <div class="val" id="kpiTrackRate">--%</div>
+      </div>
+      <div class="kpi-box">
+        <div class="lbl">Data Quality</div>
+        <div class="val" id="kpiQuality" style="font-size:1.0rem">--</div>
+      </div>
+    </div>
+
+    <!-- Charts Grid -->
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+      <div style="background:#0B0E14; border:1px solid var(--border); border-radius:10px; padding:16px;">
+        <h4 style="font-size:0.85rem; color:var(--muted); margin-bottom:12px;">EMOTION DISTRIBUTION</h4>
+        <div style="height:220px; position:relative;">
+          <canvas id="modalDonutChart"></canvas>
+        </div>
+      </div>
+      <div style="background:#0B0E14; border:1px solid var(--border); border-radius:10px; padding:16px;">
+        <h4 style="font-size:0.85rem; color:var(--muted); margin-bottom:12px;">SAMPLE FREQUENCIES</h4>
+        <div style="height:220px; position:relative;">
+          <canvas id="modalBarChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Actions -->
+    <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:8px;">
+      <button class="btn btn-ghost" onclick="downloadJSONReport()">💾 Export JSON</button>
+      <button class="btn btn-ghost" onclick="downloadCSVReport()">📊 Export CSV</button>
+      <button class="btn btn-primary" onclick="closeReportModal()">Done</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const EMOTION_CLASSES = ['Happy', 'Sad', 'Disgust', 'Surprise', 'Fear', 'Angry', 'Neutral'];
+const EMOTION_COLORS = {
+  'Happy': '#5FE39A',
+  'Sad': '#567AE1',
+  'Disgust': '#7AC755',
+  'Surprise': '#F755A8',
+  'Fear': '#F0963C',
+  'Angry': '#EF4444',
+  'Neutral': '#919BA5'
+};
+const EMOTION_EMOJIS = {
+  'Happy': '😊',
+  'Sad': '😢',
+  'Disgust': '🤢',
+  'Surprise': '😲',
+  'Fear': '😨',
+  'Angry': '😠',
+  'Neutral': '😐'
+};
+
+const SAMPLE_PHOTOS = [
+  { id: 'p1', filename: 'test_photos/WIN_20260901_17_11_36_Pro.jpg', title: 'Sample #1: Baseline Posture' },
+  { id: 'p2', filename: 'test_photos/WIN_20260901_17_11_43_Pro.jpg', title: 'Sample #2: Focused Neutral' },
+  { id: 'p3', filename: 'test_photos/WIN_20260901_17_11_49_Pro.jpg', title: 'Sample #3: Facial Tension' },
+  { id: 'p4', filename: 'test_photos/WIN_20260901_17_11_52_Pro.jpg', title: 'Sample #4: High Alert (Surprise)' }
+];
+
+let video = document.getElementById('webcamVideo');
+let canvas = document.getElementById('overlayCanvas');
+let ctx = canvas.getContext('2d');
+let stream = null;
+let isStreaming = false;
+let isPredicting = false;
+let sessionActive = false;
+let targetDuration = 60;
+let lastReport = null;
+
+let donutChartInstance = null;
+let barChartInstance = null;
+
+// Initialize Spectrum Bars
+function initSpectrum() {
+  const container = document.getElementById('spectrumContainer');
+  container.innerHTML = '';
+  EMOTION_CLASSES.forEach(em => {
+    container.innerHTML += `
+      <div class="spectrum-row">
+        <span class="spectrum-label">${em}</span>
+        <div class="spectrum-track">
+          <div class="spectrum-fill" id="fill_${em}" style="background:${EMOTION_COLORS[em]}; width:0%"></div>
+        </div>
+        <span class="spectrum-pct" id="pct_${em}">0%</span>
+      </div>
+    `;
+  });
+}
+initSpectrum();
+
+// Tab Switcher
+function switchTab(tab) {
+  document.getElementById('tabLiveBtn').classList.toggle('active', tab === 'live');
+  document.getElementById('tabSampleBtn').classList.toggle('active', tab === 'samples');
+  document.getElementById('tabLiveContent').style.display = (tab === 'live') ? 'block' : 'none';
+  document.getElementById('tabSampleContent').style.display = (tab === 'samples') ? 'block' : 'none';
+  if (tab === 'samples') initSampleCards();
+}
+
+// Check Backend Health
+async function checkBackend() {
+  try {
+    const res = await fetch('/api/status');
+    const data = await res.json();
+    document.getElementById('serverStatusBadge').textContent = 'ONLINE';
+    document.getElementById('serverStatusBadge').className = 'status-pill status-active';
+    document.getElementById('backendEngine').textContent = `${data.face_detector} + ${data.emotion_classifier} (${data.device.toUpperCase()})`;
+  } catch(e) {
+    document.getElementById('serverStatusBadge').textContent = 'OFFLINE / DISCONNECTED';
+    document.getElementById('serverStatusBadge').className = 'status-pill status-danger';
+  }
+}
+checkBackend();
+setInterval(checkBackend, 5000);
+
+// Camera Controls
+async function startWebcam() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 960 }, height: { ideal: 540 } },
+      audio: false
+    });
+    video.srcObject = stream;
+    await video.play();
+
+    canvas.width = video.videoWidth || 960;
+    canvas.height = video.videoHeight || 540;
+
+    isStreaming = true;
+    document.getElementById('startCamBtn').disabled = true;
+    document.getElementById('stopCamBtn').disabled = false;
+    document.getElementById('sessionBtn').disabled = false;
+
+    processInferenceLoop();
+  } catch(err) {
+    alert("Camera access denied or device not found: " + err.message);
+  }
+}
+
+function stopWebcam() {
+  isStreaming = false;
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
+  }
+  video.srcObject = null;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  document.getElementById('startCamBtn').disabled = false;
+  document.getElementById('stopCamBtn').disabled = true;
+  document.getElementById('sessionBtn').disabled = true;
+  document.getElementById('cropEmptyLabel').style.display = 'block';
+  document.getElementById('cropThumbImg').style.display = 'none';
+}
+
+function setDuration(dur) {
+  if (sessionActive) return;
+  targetDuration = dur;
+  document.getElementById('dur1mBtn').className = (dur === 60) ? 'btn btn-active' : 'btn btn-ghost';
+  document.getElementById('dur2mBtn').className = (dur === 120) ? 'btn btn-active' : 'btn btn-ghost';
+  document.getElementById('sessionTargetDisplay').textContent = `${dur}s (${dur/60} MIN)`;
+}
+
+// Session Controls
+async function toggleSession() {
+  if (!sessionActive) {
+    const res = await fetch('/api/session/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ duration: targetDuration })
+    });
+    sessionActive = true;
+    document.getElementById('sessionBtn').textContent = '⏹ Stop Session';
+    document.getElementById('sessionBtn').className = 'btn btn-danger';
+    document.getElementById('viewReportBtn').style.display = 'none';
+  } else {
+    stopSession();
+  }
+}
+
+async function stopSession() {
+  sessionActive = false;
+  const res = await fetch('/api/session/stop', { method: 'POST' });
+  const data = await res.json();
+  lastReport = data.report;
+  document.getElementById('sessionBtn').textContent = '▶ Start Session';
+  document.getElementById('sessionBtn').className = 'btn btn-primary';
+  document.getElementById('viewReportBtn').style.display = 'inline-flex';
+  openReportModal();
+}
+
+async function resetSession() {
+  sessionActive = false;
+  await fetch('/api/session/reset', { method: 'POST' });
+  document.getElementById('sessionBtn').textContent = '▶ Start Session';
+  document.getElementById('sessionBtn').className = 'btn btn-primary';
+  document.getElementById('sessionTimerText').textContent = 'SESSION: READY — Press [START SESSION]';
+  document.getElementById('sessionSamplesText').textContent = 'VALID PREDICTIONS: 0';
+  document.getElementById('sessionProgFill').style.width = '0%';
+  document.getElementById('viewReportBtn').style.display = 'none';
+}
+
+// Inference Loop
+async function processInferenceLoop() {
+  if (!isStreaming) return;
+
+  if (!isPredicting) {
+    isPredicting = true;
+    const t0 = performance.now();
+
+    // Capture frame from video element
+    const off = document.createElement('canvas');
+    off.width = 640;
+    off.height = Math.round(640 * (video.videoHeight / video.videoWidth));
+    const offCtx = off.getContext('2d');
+    offCtx.drawImage(video, 0, 0, off.width, off.height);
+    const jpegB64 = off.toDataURL('image/jpeg', 0.75);
+
+    try {
+      const res = await fetch('/api/predict_frame', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: jpegB64 })
+      });
+      const data = await res.json();
+      const roundtrip = Math.round(performance.now() - t0);
+
+      renderHUD(data);
+      updateTelemetry(data, roundtrip);
+      updateSessionUI(data.session);
+
+      if (data.session && data.session.is_completed && sessionActive) {
+        stopSession();
+      }
+    } catch(err) {
+      console.warn("Prediction frame dropped:", err);
+    } finally {
+      isPredicting = false;
+    }
+  }
+
+  requestAnimationFrame(processInferenceLoop);
+}
+
+// Render YOLO Bounding Box & Floating Badge on Canvas
+function renderHUD(data) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (!data.has_face || !data.faces || data.faces.length === 0) {
+    document.getElementById('cropEmptyLabel').style.display = 'block';
+    document.getElementById('cropThumbImg').style.display = 'none';
+    return;
+  }
+
+  // Scale coordinates from 640px to video dimensions
+  const scaleX = canvas.width / 640;
+  const scaleY = canvas.height / Math.round(640 * (canvas.height / canvas.width));
+
+  data.faces.forEach((f, idx) => {
+    // Un-mirror coordinate for mirrored video element
+    const rawX1 = f.box[0] * scaleX;
+    const rawX2 = f.box[2] * scaleX;
+    const y1 = f.box[1] * scaleY;
+    const y2 = f.box[3] * scaleY;
+
+    // Flip X for CSS mirrored video
+    const x1 = canvas.width - rawX2;
+    const x2 = canvas.width - rawX1;
+    const fw = x2 - x1;
+    const fh = y2 - y1;
+
+    const em = f.emotion || 'Neutral';
+    const color = EMOTION_COLORS[em] || '#5FE39A';
+
+    // 1. Bounding Box
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(x1, y1, fw, fh);
+
+    // 2. Corner Brackets
+    const bLen = Math.max(12, Math.min(fw, fh) * 0.18);
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#FFFFFF';
+    // Top-left
+    ctx.beginPath(); ctx.moveTo(x1, y1 + bLen); ctx.lineTo(x1, y1); ctx.lineTo(x1 + bLen, y1); ctx.stroke();
+    // Top-right
+    ctx.beginPath(); ctx.moveTo(x2 - bLen, y1); ctx.lineTo(x2, y1); ctx.lineTo(x2, y1 + bLen); ctx.stroke();
+    // Bottom-left
+    ctx.beginPath(); ctx.moveTo(x1, y2 - bLen); ctx.lineTo(x1, y2); ctx.lineTo(x1 + bLen, y2); ctx.stroke();
+    // Bottom-right
+    ctx.beginPath(); ctx.moveTo(x2 - bLen, y2); ctx.lineTo(x2, y2); ctx.lineTo(x2, y2 - bLen); ctx.stroke();
+
+    // 3. Floating Emotion Badge
+    const badgeText = `${f.emoji} ${em.toUpperCase()} (${Math.round(f.confidence * 100)}%)`;
+    ctx.font = 'bold 16px "Plus Jakarta Sans", sans-serif';
+    const tw = ctx.measureText(badgeText).width;
+    const bw = tw + 28;
+    const bh = 34;
+    const bx = Math.max(10, Math.min(canvas.width - bw - 10, x1 + (fw - bw) / 2));
+    const by = Math.max(10, y1 - bh - 8);
+
+    ctx.fillStyle = 'rgba(12, 15, 20, 0.9)';
+    ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 6); ctx.fill();
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText(badgeText, bx + 14, by + 23);
+
+    // Update Primary Face Crop Preview Inset
+    if (idx === 0 && f.crop_thumb) {
+      document.getElementById('cropEmptyLabel').style.display = 'none';
+      const imgEl = document.getElementById('cropThumbImg');
+      imgEl.src = f.crop_thumb;
+      imgEl.style.display = 'block';
+    }
+
+    // Update 7-Emotion Spectrum Bars
+    if (f.probabilities) {
+      EMOTION_CLASSES.forEach(c => {
+        const p = f.probabilities[c] || 0.0;
+        document.getElementById(`fill_${c}`).style.width = `${Math.round(p * 100)}%`;
+        document.getElementById(`pct_${c}`).textContent = `${Math.round(p * 100)}%`;
+      });
+    }
+  });
+}
+
+function updateTelemetry(data, roundtrip) {
+  document.getElementById('detLatText').textContent = `${data.det_latency_ms} ms`;
+  document.getElementById('clsLatText').textContent = `${data.cls_latency_ms} ms`;
+  document.getElementById('totLatText').textContent = `${roundtrip} ms`;
+  const fps = roundtrip > 0 ? Math.round(1000 / roundtrip) : 0;
+  document.getElementById('fpsText').textContent = `${fps} FPS`;
+}
+
+function updateSessionUI(session) {
+  if (!session) return;
+  if (session.state === 'RUNNING') {
+    const pct = Math.min(100, Math.round((session.elapsed / session.duration) * 100));
+    const mins = Math.floor(session.elapsed / 60).toString().padStart(2, '0');
+    const secs = Math.floor(session.elapsed % 60).toString().padStart(2, '0');
+    const totM = Math.floor(session.duration / 60).toString().padStart(2, '0');
+    const totS = Math.floor(session.duration % 60).toString().padStart(2, '0');
+
+    document.getElementById('sessionTimerText').textContent = `SESSION: ${mins}:${secs} / ${totM}:${totS} (${pct}%)`;
+    document.getElementById('sessionSamplesText').textContent = `VALID PREDICTIONS: ${session.samples}`;
+    document.getElementById('sessionProgFill').style.width = `${pct}%`;
+  }
+}
+
+// Sample Photos Benchmark Tab
+function initSampleCards() {
+  const container = document.getElementById('sampleCardsContainer');
+  if (container.children.length > 0) return;
+
+  SAMPLE_PHOTOS.forEach(s => {
+    container.innerHTML += `
+      <div class="sample-card" id="card_${s.id}">
+        <div class="sample-head">
+          <span class="sample-title">${s.title}</span>
+          <button class="btn btn-ghost" onclick="evaluateSingleSample('${s.id}', '${s.filename}')">⚡ Run YOLO + Emotion</button>
+        </div>
+        <div class="sample-stage">
+          <img id="img_${s.id}" src="${s.filename}" alt="${s.title}" />
+          <canvas id="sc_${s.id}"></canvas>
+        </div>
+        <div id="res_${s.id}" style="font-family:'JetBrains Mono',monospace; font-size:0.82rem; color:var(--muted)">
+          Click [Run YOLO + Emotion] to run inference.
+        </div>
+      </div>
+    `;
+  });
+}
+
+async function evaluateSingleSample(id, filename) {
+  const resDiv = document.getElementById(`res_${id}`);
+  resDiv.innerHTML = '<span style="color:#E5A84B">Running YOLO face detection & InceptionResnetV1 inference…</span>';
+
+  try {
+    const res = await fetch('/api/predict_sample', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename })
+    });
+    const data = await res.json();
+
+    if (!data.has_face || !data.faces || data.faces.length === 0) {
+      resDiv.innerHTML = '<span style="color:#EF4444">YOLO failed to localize face in photo.</span>';
+      return;
+    }
+
+    const f = data.faces[0];
+    const em = f.emotion || 'Neutral';
+    const col = EMOTION_COLORS[em] || '#5FE39A';
+
+    resDiv.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <span>YOLO DET: <strong>${Math.round(f.det_conf * 100)}%</strong></span>
+        <span>PREDICTED: <strong style="color:${col};font-size:1.0rem">${f.emoji} ${em.toUpperCase()} (${Math.round(f.confidence * 100)}%)</strong></span>
+      </div>
+      <div style="font-size:0.75rem; color:var(--muted)">Latency: YOLO: ${data.det_latency_ms}ms | Emotion: ${data.cls_latency_ms}ms | Total: ${data.total_latency_ms}ms</div>
+    `;
+
+    // Draw Box on Canvas
+    const imgEl = document.getElementById(`img_${id}`);
+    const scCanvas = document.getElementById(`sc_${id}`);
+    scCanvas.width = imgEl.naturalWidth || data.width;
+    scCanvas.height = imgEl.naturalHeight || data.height;
+    const scCtx = scCanvas.getContext('2d');
+    scCtx.clearRect(0, 0, scCanvas.width, scCanvas.height);
+
+    const b = f.box;
+    scCtx.strokeStyle = col;
+    scCtx.lineWidth = 4;
+    scCtx.strokeRect(b[0], b[1], b[2] - b[0], b[3] - b[1]);
+
+    // Floating Badge
+    const badgeTxt = `${f.emoji} ${em.toUpperCase()} (${Math.round(f.confidence * 100)}%)`;
+    scCtx.font = 'bold 28px "Plus Jakarta Sans", sans-serif';
+    const tw = scCtx.measureText(badgeTxt).width;
+    scCtx.fillStyle = 'rgba(12,15,20,0.9)';
+    scCtx.beginPath(); scCtx.roundRect(b[0], Math.max(10, b[1] - 50), tw + 36, 46, 8); scCtx.fill();
+    scCtx.strokeStyle = col; scCtx.lineWidth = 2; scCtx.stroke();
+    scCtx.fillStyle = '#FFFFFF';
+    scCtx.fillText(badgeTxt, b[0] + 18, Math.max(42, b[1] - 18));
+  } catch(e) {
+    resDiv.innerHTML = `<span style="color:#EF4444">Error: ${e.message}</span>`;
+  }
+}
+
+async function benchmarkAllSamples() {
+  for (const s of SAMPLE_PHOTOS) {
+    await evaluateSingleSample(s.id, s.filename);
+  }
+}
+
+// Modal Report
+function openReportModal() {
+  if (!lastReport) return;
+  const modal = document.getElementById('reportModal');
+  modal.style.display = 'flex';
+
+  const info = lastReport.sessionInformation;
+  const mf = lastReport.mostFrequentlyDetectedExpression;
+  const confAna = lastReport.confidenceAnalysis;
+  const q = lastReport.dataQuality;
+
+  document.getElementById('modalSessionTitle').textContent = `Evaluation Report [${info.sessionId}]`;
+  document.getElementById('modalSessionSub').textContent = `Duration: ${info.actualDurationSeconds}s | Valid Predictions: ${info.totalValidPredictions} | Face Coverage: ${q.faceDetectionSuccessRatePct}%`;
+
+  document.getElementById('kpiDominant').textContent = `${EMOTION_EMOJIS[mf.emotion] || ''} ${mf.emotion} (${mf.percentage}%)`;
+  document.getElementById('kpiDominant').style.color = EMOTION_COLORS[mf.emotion] || '#5FE39A';
+  document.getElementById('kpiAvgConf').textContent = `${Math.round(confAna.overallAverageConfidence * 100)}%`;
+  document.getElementById('kpiTrackRate').textContent = `${q.faceDetectionSuccessRatePct}%`;
+  document.getElementById('kpiQuality').textContent = q.isDataSufficient ? 'RELIABLE DATA' : 'INSUFFICIENT SAMPLES';
+  document.getElementById('kpiQuality').style.color = q.isDataSufficient ? '#5FE39A' : '#EF4444';
+
+  renderModalCharts();
+}
+
+function closeReportModal() {
+  document.getElementById('reportModal').style.display = 'none';
+}
+
+function renderModalCharts() {
+  const dist = lastReport.expressionDistribution;
+  const labels = EMOTION_CLASSES;
+  const pcts = labels.map(c => dist[c].percentage);
+  const counts = labels.map(c => dist[c].count);
+  const colors = labels.map(c => EMOTION_COLORS[c]);
+
+  // Donut
+  if (donutChartInstance) donutChartInstance.destroy();
+  const ctxD = document.getElementById('modalDonutChart').getContext('2d');
+  donutChartInstance = new Chart(ctxD, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{ data: pcts, backgroundColor: colors, borderWidth: 2, borderColor: '#151A22' }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'right', labels: { color: '#EDE7DA' } } }
+    }
+  });
+
+  // Bar
+  if (barChartInstance) barChartInstance.destroy();
+  const ctxB = document.getElementById('modalBarChart').getContext('2d');
+  barChartInstance = new Chart(ctxB, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ label: 'Frame Count', data: counts, backgroundColor: colors, borderRadius: 6 }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#8A93A6' }, grid: { display: false } },
+        y: { ticks: { color: '#8A93A6' }, grid: { color: '#232B39' } }
+      }
+    }
+  });
+}
+
+function downloadJSONReport() {
+  if (!lastReport) return;
+  const blob = new Blob([JSON.stringify(lastReport, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `SignalWell_Session_${lastReport.sessionInformation.sessionId}.json`;
+  a.click();
+}
+
+function downloadCSVReport() {
+  if (!lastReport || !lastReport.rawPredictions) return;
+  const rows = [
+    ["timestamp", "elapsedSeconds", "emotion", "confidence", "smoothedEmotion", "Happy", "Sad", "Disgust", "Surprise", "Fear", "Angry", "Neutral"]
+  ];
+  lastReport.rawPredictions.forEach(s => {
+    rows.push([
+      s.timestamp, s.elapsedSeconds, s.emotion, s.confidence, s.smoothedEmotion,
+      s.probabilities.Happy, s.probabilities.Sad, s.probabilities.Disgust,
+      s.probabilities.Surprise, s.probabilities.Fear, s.probabilities.Angry, s.probabilities.Neutral
+    ]);
+  });
+  const csvStr = rows.map(r => r.join(",")).join("\n");
+  const blob = new Blob([csvStr], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `SignalWell_Session_${lastReport.sessionInformation.sessionId}.csv`;
+  a.click();
+}
+</script>
+</body>
+</html>
