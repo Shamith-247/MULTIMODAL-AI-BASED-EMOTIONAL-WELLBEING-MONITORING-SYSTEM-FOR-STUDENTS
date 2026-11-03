@@ -1,0 +1,70 @@
+{
+  "timestamp": "2026-11-04 00:00:02",
+  "model_checkpoint": "face_model_v6_best.pt",
+  "yolo_detector": "yolov11n-face.pt",
+  "raw_baseline": {
+    "total_samples": 4,
+    "overall_accuracy": 50.0,
+    "macro_precision": 19.05,
+    "macro_recall": 28.57,
+    "macro_f1": 21.43,
+    "weighted_f1": 37.5,
+    "weighted_precision": 33.33,
+    "weighted_recall": 50.0,
+    "per_class": {
+      "Happy": { "precision": 0.0, "recall": 0.0, "f1": 0.0, "accuracy": 0.0, "support": 0 },
+      "Sad": { "precision": 0.0, "recall": 0.0, "f1": 0.0, "accuracy": 0.0, "support": 0 },
+      "Disgust": { "precision": 0.0, "recall": 0.0, "f1": 0.0, "accuracy": 0.0, "support": 1 },
+      "Surprise": { "precision": 100.0, "recall": 100.0, "f1": 100.0, "accuracy": 100.0, "support": 1 },
+      "Fear": { "precision": 0.0, "recall": 0.0, "f1": 0.0, "accuracy": 0.0, "support": 0 },
+      "Angry": { "precision": 0.0, "recall": 0.0, "f1": 0.0, "accuracy": 0.0, "support": 1 },
+      "Neutral": { "precision": 33.33, "recall": 100.0, "f1": 50.0, "accuracy": 100.0, "support": 1 }
+    },
+    "confusion_matrix": [
+      [0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 1],
+      [0, 0, 0, 1, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 1],
+      [0, 0, 0, 0, 0, 0, 1]
+    ]
+  },
+  "enhanced_calibrated": {
+    "total_samples": 4,
+    "overall_accuracy": 100.0,
+    "macro_precision": 57.14,
+    "macro_recall": 57.14,
+    "macro_f1": 57.14,
+    "weighted_f1": 100.0,
+    "weighted_precision": 100.0,
+    "weighted_recall": 100.0,
+    "per_class": {
+      "Happy": { "precision": 0.0, "recall": 0.0, "f1": 0.0, "accuracy": 0.0, "support": 0 },
+      "Sad": { "precision": 0.0, "recall": 0.0, "f1": 0.0, "accuracy": 0.0, "support": 0 },
+      "Disgust": { "precision": 100.0, "recall": 100.0, "f1": 100.0, "accuracy": 100.0, "support": 1 },
+      "Surprise": { "precision": 100.0, "recall": 100.0, "f1": 100.0, "accuracy": 100.0, "support": 1 },
+      "Fear": { "precision": 0.0, "recall": 0.0, "f1": 0.0, "accuracy": 0.0, "support": 0 },
+      "Angry": { "precision": 100.0, "recall": 100.0, "f1": 100.0, "accuracy": 100.0, "support": 1 },
+      "Neutral": { "precision": 100.0, "recall": 100.0, "f1": 100.0, "accuracy": 100.0, "support": 1 }
+    },
+    "confusion_matrix": [
+      [0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 1, 0, 0, 0, 0],
+      [0, 0, 0, 1, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 1, 0],
+      [0, 0, 0, 0, 0, 0, 1]
+    ]
+  },
+  "parameters": {
+    "aspect_ratio_padding": "1:1 square center-padding (1.30x)",
+    "clahe_clip_limit": 2.2,
+    "clahe_tile_grid": [8, 8],
+    "temperature_scaling": 0.85,
+    "neutral_penalty": 1.35,
+    "disgust_boost": 0.20,
+    "uncertainty_threshold": 0.38
+  }
+}

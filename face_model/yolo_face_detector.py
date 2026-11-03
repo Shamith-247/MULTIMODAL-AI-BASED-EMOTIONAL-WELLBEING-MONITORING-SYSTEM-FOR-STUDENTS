@@ -200,9 +200,13 @@ class YOLOFaceDetector:
         self.last_det_time = det_time_ms
         return faces, det_time_ms
 
-    def extract_face_crop(self, frame_bgr, xyxy, padding=0.10):
+    def extract_face_crop(self, frame_bgr, xyxy, padding=0.12, make_square=True):
         """
-        Extracts a safe face crop from frame_bgr with optional context padding.
+        Extracts a high-fidelity face crop from frame_bgr with context margin.
+        When make_square=True, calculates a 1:1 square bounding box around the face center,
+        preventing aspect-ratio stretching/compression when resized for CNN inference.
+        If the square box extends outside the frame boundaries, uses mirror/border padding.
+
         Returns:
             face_crop (numpy.ndarray or None): cropped face image
             crop_coords (tuple): (cx1, cy1, cx2, cy2) clamped coordinates
@@ -213,24 +217,68 @@ class YOLOFaceDetector:
         h, w = frame_bgr.shape[:2]
         x1, y1, x2, y2 = xyxy
 
-        fw = x2 - x1
-        fh = y2 - y1
-        pad_x = int(fw * padding)
-        pad_y = int(fh * padding)
+        fw = max(1, x2 - x1)
+        fh = max(1, y2 - y1)
+        cx = (x1 + x2) // 2
+        cy = (y1 + y2) // 2
 
-        cx1 = max(0, x1 - pad_x)
-        cy1 = max(0, y1 - pad_y)
-        cx2 = min(w, x2 + pad_x)
-        cy2 = min(h, y2 + pad_y)
+        if make_square:
+            # Side length based on maximum dimension plus context margin
+            side = int(max(fw, fh) * (1.0 + 2.0 * padding))
+            half_side = side // 2
 
-        if cx2 <= cx1 or cy2 <= cy1:
-            return None, (0, 0, 0, 0)
+            box_x1 = cx - half_side
+            box_y1 = cy - half_side
+            box_x2 = box_x1 + side
+            box_y2 = box_y1 + side
 
-        crop = frame_bgr[cy1:cy2, cx1:cx2]
-        if crop.size == 0 or crop.shape[0] < 5 or crop.shape[1] < 5:
-            return None, (0, 0, 0, 0)
+            # Determine padding needed if box extends beyond frame edges
+            pad_left = max(0, -box_x1)
+            pad_top = max(0, -box_y1)
+            pad_right = max(0, box_x2 - w)
+            pad_bottom = max(0, box_y2 - h)
 
-        return crop, (cx1, cy1, cx2, cy2)
+            # Intersection with valid frame
+            src_x1 = max(0, box_x1)
+            src_y1 = max(0, box_y1)
+            src_x2 = min(w, box_x2)
+            src_y2 = min(h, box_y2)
+
+            if src_x2 <= src_x1 or src_y2 <= src_y1:
+                return None, (0, 0, 0, 0)
+
+            crop_valid = frame_bgr[src_y1:src_y2, src_x1:src_x2]
+
+            # If boundary exceeded, apply copyMakeBorder to preserve perfect square aspect ratio
+            if pad_left > 0 or pad_top > 0 or pad_right > 0 or pad_bottom > 0:
+                crop = cv2.copyMakeBorder(
+                    crop_valid,
+                    top=pad_top,
+                    bottom=pad_bottom,
+                    left=pad_left,
+                    right=pad_right,
+                    borderType=cv2.BORDER_REFLECT_101
+                )
+            else:
+                crop = crop_valid
+
+            return crop, (src_x1, src_y1, src_x2, src_y2)
+        else:
+            pad_x = int(fw * padding)
+            pad_y = int(fh * padding)
+            cx1 = max(0, x1 - pad_x)
+            cy1 = max(0, y1 - pad_y)
+            cx2 = min(w, x2 + pad_x)
+            cy2 = min(h, y2 + pad_y)
+
+            if cx2 <= cx1 or cy2 <= cy1:
+                return None, (0, 0, 0, 0)
+
+            crop = frame_bgr[cy1:cy2, cx1:cx2]
+            if crop.size == 0 or crop.shape[0] < 5 or crop.shape[1] < 5:
+                return None, (0, 0, 0, 0)
+
+            return crop, (cx1, cy1, cx2, cy2)
 
 if __name__ == "__main__":
     detector = YOLOFaceDetector(conf_thresh=0.35)

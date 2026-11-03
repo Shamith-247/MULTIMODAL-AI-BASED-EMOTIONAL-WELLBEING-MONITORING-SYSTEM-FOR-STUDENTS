@@ -81,9 +81,33 @@ class IntegratedWebHandler(SimpleHTTPRequestHandler):
                 "device": classifier.device,
                 "classes": DISPLAY_CLASSES,
                 "session_state": evaluator.state,
-                "session_duration": evaluator.selected_duration_sec
+                "session_duration": evaluator.selected_duration_sec,
+                "calibration": {
+                    "clahe": classifier.use_clahe,
+                    "temperature": classifier.temperature,
+                    "neutral_penalty": classifier.neutral_penalty,
+                    "disgust_boost": classifier.disgust_boost,
+                    "uncertainty_threshold": classifier.uncertainty_threshold
+                }
             }
             self._send_json(data)
+            return
+
+        if url.path == "/api/benchmark/report":
+            report_paths = [
+                os.path.join(SCRIPT_DIR, "empirical_evaluation_report.json"),
+                os.path.join(PROJECT_ROOT, "face_model", "empirical_evaluation_report.json")
+            ]
+            report_data = None
+            for rp in report_paths:
+                if os.path.exists(rp):
+                    with open(rp, "r", encoding="utf-8") as f:
+                        report_data = json.load(f)
+                    break
+            if report_data:
+                self._send_json(report_data)
+            else:
+                self._send_json({"error": "Benchmark report not generated yet"}, status=404)
             return
 
         if url.path == "/api/session/report":
@@ -196,8 +220,8 @@ class IntegratedWebHandler(SimpleHTTPRequestHandler):
         if faces:
             for idx, f in enumerate(faces):
                 xyxy = f["xyxy"]
-                # 2. Extract clamped, 12% padded face crop
-                crop, coords = detector.extract_face_crop(frame, xyxy, padding=0.12)
+                # 2. Extract clamped, square aspect-ratio face crop (15% context margin)
+                crop, coords = detector.extract_face_crop(frame, xyxy, padding=0.15, make_square=True)
                 if crop is not None:
                     # 3. Predict emotion with face_model_v6_best.pt
                     prev_ema = face_ema_tracker.get(idx)
@@ -310,7 +334,7 @@ class IntegratedWebHandler(SimpleHTTPRequestHandler):
 
         for f in faces:
             xyxy = f["xyxy"]
-            crop, _ = detector.extract_face_crop(frame, xyxy, padding=0.12)
+            crop, _ = detector.extract_face_crop(frame, xyxy, padding=0.15, make_square=True)
             if crop is not None:
                 top_em, conf, probs, cls_ms = classifier.predict_face(crop)
                 cls_total += cls_ms

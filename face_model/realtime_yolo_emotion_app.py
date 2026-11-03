@@ -801,7 +801,7 @@ class RealTimeYOLOEmotionApp:
         cls_ms_total = 0.0
         for idx, f in enumerate(faces):
             xyxy = f['xyxy']
-            crop, coords = self.detector.extract_face_crop(frame, xyxy, padding=0.12)
+            crop, coords = self.detector.extract_face_crop(frame, xyxy, padding=0.15, make_square=True)
             if crop is not None:
                 self.primary_crop = crop
                 top_em, conf, probs, cls_ms = self.classifier.predict_face(crop)
@@ -902,7 +902,7 @@ class RealTimeYOLOEmotionApp:
                         if faces:
                             for idx, f in enumerate(faces):
                                 xyxy = f['xyxy']
-                                crop, coords = self.detector.extract_face_crop(raw_frame, xyxy, padding=0.12)
+                                crop, coords = self.detector.extract_face_crop(raw_frame, xyxy, padding=0.15, make_square=True)
                                 if idx == 0:
                                     self.primary_crop = crop
 
