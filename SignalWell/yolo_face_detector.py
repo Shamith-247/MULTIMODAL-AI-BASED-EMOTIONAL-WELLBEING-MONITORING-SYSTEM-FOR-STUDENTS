@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 """
-SignalWell — Lightweight YOLO-based Face Detector
-==================================================
-High-performance face detector utilizing YOLOv8n-face (nano architecture).
-Provides:
-- Single-pass multi-face detection
-- Bounding-box coordinate extraction [x1, y1, x2, y2] and [x, y, w, h]
-- Confidence scoring and threshold filtering
-- Dynamic scaling for ultra-low latency CPU/GPU inference
-- Automatic weight download if not locally available
-- Resilient fallback to OpenCV YuNet ONNX or Haar Cascade
+SignalWell — Lightweight Dedicated YOLO Face Detector
+======================================================
+Dedicated face detector utilizing YOLO11n-face (nano architecture) from:
+https://github.com/akanametov/yolo-face
+
+Features:
+- Single-pass multi-face detection with high recall under head tilt, yaw, pitch, and varying lighting.
+- Accurate bounding-box extraction [x1, y1, x2, y2] and [x, y, w, h].
+- Configurable and dynamically adjustable confidence threshold (default: 0.35).
+- Non-Maximum Suppression (NMS IoU: 0.45) to prevent duplicate boxes.
+- Safe coordinate validation and boundary clamping.
+- Robust face-crop extraction with context margin for visual verification.
+- Zero dependency on restrictive center-guide positions.
+- CPU & CUDA GPU acceleration support.
 """
 
 import os
@@ -19,25 +23,28 @@ import urllib.request
 import cv2
 import numpy as np
 
-# Model download URLs
-YOLO_WEIGHTS_URLS = [
-    "https://huggingface.co/junjiang/GestureFace/resolve/main/yolov8n-face.pt",
-    "https://github.com/derronqi/yolov8-face/releases/download/v0.0.0/yolov8n-face.pt"
+# Primary dedicated face model release assets (akanametov/yolo-face v1.0.0)
+YOLO_FACE_MODELS = [
+    ("yolov11n-face.pt", "https://github.com/akanametov/yolo-face/releases/download/1.0.0/yolov11n-face.pt"),
+    ("yolov11n-face.onnx", "https://github.com/akanametov/yolo-face/releases/download/1.0.0/yolov11n-face.onnx"),
+    ("yolov8n-face.pt", "https://github.com/akanametov/yolo-face/releases/download/1.0.0/yolov8n-face.pt"),
+    ("yolov8n-face.onnx", "https://github.com/akanametov/yolo-face/releases/download/1.0.0/yolov8n-face.onnx")
 ]
 
 class YOLOFaceDetector:
     """
-    Lightweight YOLOv8-face detector supporting both PyTorch (.pt) and ONNX (.onnx) runtimes.
+    Dedicated lightweight YOLO face detector supporting YOLO11n-face / YOLOv8n-face.
     """
-    def __init__(self, model_path=None, conf_thresh=0.45, iou_thresh=0.45, imgsz=640, device=None):
-        self.conf_thresh = conf_thresh
-        self.iou_thresh = iou_thresh
+    def __init__(self, model_path=None, conf_thresh=0.35, iou_thresh=0.45, imgsz=640, device=None):
+        self.conf_thresh = float(conf_thresh)
+        self.iou_thresh = float(iou_thresh)
         self.imgsz = imgsz
         self.model = None
+        self.model_name = ""
         self.backend = None
         self.last_det_time = 0.0
 
-        # Resolve device
+        # Resolve device: CUDA GPU when available, CPU otherwise
         if device is None:
             try:
                 import torch
@@ -47,58 +54,67 @@ class YOLOFaceDetector:
         else:
             self.device = device
 
-        # Determine model path
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        possible_paths = [
-            model_path,
-            os.path.join(project_root, "models", "yolov8n-face.pt"),
-            os.path.join(project_root, "models", "yolov8n-face.onnx"),
-            os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "yolov8n-face.pt"),
-            "models/yolov8n-face.pt",
-            "models/yolov8n-face.onnx"
-        ]
-        
+        models_dir = os.path.join(project_root, "models")
+        os.makedirs(models_dir, exist_ok=True)
+
+        # 1. Determine model candidate path
         valid_path = None
-        for p in possible_paths:
-            if p and os.path.exists(p):
-                valid_path = p
-                break
+        if model_path and os.path.exists(model_path):
+            valid_path = model_path
+        else:
+            # Check local files in priority order
+            for filename, _ in YOLO_FACE_MODELS:
+                local_candidate = os.path.join(models_dir, filename)
+                if os.path.exists(local_candidate) and os.path.getsize(local_candidate) > 1024 * 1024:
+                    valid_path = local_candidate
+                    break
 
-        # If weights do not exist, attempt auto-download
+        # 2. Download primary model if no valid local checkpoint is found
         if valid_path is None:
-            target_pt = os.path.join(project_root, "models", "yolov8n-face.pt")
-            os.makedirs(os.path.dirname(target_pt), exist_ok=True)
-            print(f"[YOLOFaceDetector] Downloading lightweight YOLOv8n-face weights (~6MB)...")
-            for url in YOLO_WEIGHTS_URLS:
-                try:
-                    urllib.request.urlretrieve(url, target_pt)
-                    if os.path.exists(target_pt) and os.path.getsize(target_pt) > 1024 * 1024:
-                        valid_path = target_pt
-                        print(f"[YOLOFaceDetector] Successfully downloaded weights to {valid_path}")
-                        break
-                except Exception as e:
-                    print(f"[YOLOFaceDetector] Download from {url} failed: {e}")
+            primary_name, primary_url = YOLO_FACE_MODELS[0]
+            target_file = os.path.join(models_dir, primary_name)
+            print(f"[YOLOFaceDetector] Downloading {primary_name} from {primary_url}...")
+            try:
+                # Add browser User-Agent for GitHub releases
+                req = urllib.request.Request(
+                    primary_url,
+                    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+                )
+                with urllib.request.urlopen(req) as resp, open(target_file, 'wb') as out_f:
+                    out_f.write(resp.read())
+                if os.path.exists(target_file) and os.path.getsize(target_file) > 1024 * 1024:
+                    valid_path = target_file
+                    print(f"[YOLOFaceDetector] Successfully downloaded {primary_name} ({os.path.getsize(target_file)/1024/1024:.2f} MB)")
+            except Exception as e:
+                print(f"[YOLOFaceDetector] Download failed: {e}")
 
-        # Initialize detector
+        # 3. Load model via Ultralytics
         if valid_path and os.path.exists(valid_path):
             try:
                 from ultralytics import YOLO
                 self.model = YOLO(valid_path)
+                self.model_name = os.path.basename(valid_path)
                 self.backend = "ultralytics"
-                print(f"[YOLOFaceDetector] Loaded YOLOv8-face from {valid_path} on {self.device}")
+                print(f"[YOLOFaceDetector] Loaded dedicated face model '{self.model_name}' on {self.device} (conf_thresh={self.conf_thresh})")
             except Exception as e:
                 print(f"[YOLOFaceDetector] Failed to load with Ultralytics: {e}")
                 self.model = None
 
-        # Fallback to OpenCV Haar Cascade if YOLO cannot be initialized
+        # 4. Fallback if Ultralytics fails
         if self.model is None:
             haar_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
             if os.path.exists(haar_path):
                 self.model = cv2.CascadeClassifier(haar_path)
+                self.model_name = "haarcascade_frontalface_default.xml"
                 self.backend = "haar_fallback"
-                print(f"[YOLOFaceDetector] Fallback: Using OpenCV Haar Cascade from {haar_path}")
+                print(f"[YOLOFaceDetector] Warning: Falling back to OpenCV Haar Cascade from {haar_path}")
             else:
-                print(f"[YOLOFaceDetector] ERROR: No face detector could be loaded.")
+                print(f"[YOLOFaceDetector] ERROR: No face detector could be initialized.")
+
+    def set_confidence_threshold(self, new_thresh: float):
+        """Allows dynamically updating detection confidence at runtime."""
+        self.conf_thresh = max(0.05, min(0.95, float(new_thresh)))
 
     def detect(self, frame_bgr):
         """
@@ -106,12 +122,12 @@ class YOLOFaceDetector:
         Returns:
             faces: list of dicts:
                 {
-                    'bbox': (x, y, w, h),
+                    'bbox': (x1, y1, fw, fh),
                     'xyxy': (x1, y1, x2, y2),
                     'conf': float,
                     'center': (cx, cy)
                 }
-            det_time_ms: float latency in milliseconds
+            det_time_ms: float detection latency in milliseconds
         """
         if frame_bgr is None or frame_bgr.size == 0 or self.model is None:
             return [], 0.0
@@ -121,7 +137,6 @@ class YOLOFaceDetector:
         faces = []
 
         if self.backend == "ultralytics":
-            # Run inference with YOLOv8-face
             results = self.model.predict(
                 source=frame_bgr,
                 conf=self.conf_thresh,
@@ -130,22 +145,24 @@ class YOLOFaceDetector:
                 device=self.device,
                 verbose=False
             )
-            
+
             if results and len(results) > 0 and results[0].boxes is not None:
                 boxes = results[0].boxes
                 for box in boxes:
                     xyxy = box.xyxy[0].cpu().numpy().astype(int)
                     x1, y1, x2, y2 = xyxy
-                    # Clamp to image boundaries
-                    x1 = max(0, min(x1, w - 1))
-                    y1 = max(0, min(y1, h - 1))
-                    x2 = max(0, min(x2, w))
-                    y2 = max(0, min(y2, h))
+
+                    # Safe clamp to frame boundaries
+                    x1 = max(0, min(int(x1), w - 1))
+                    y1 = max(0, min(int(y1), h - 1))
+                    x2 = max(0, min(int(x2), w))
+                    y2 = max(0, min(int(y2), h))
 
                     fw = max(0, x2 - x1)
                     fh = max(0, y2 - y1)
 
-                    if fw < 20 or fh < 20:
+                    # Reject degenerate bounding boxes (< 15x15 pixels)
+                    if fw < 15 or fh < 15:
                         continue
 
                     conf = float(box.conf[0].cpu().numpy())
@@ -165,7 +182,7 @@ class YOLOFaceDetector:
                 gray,
                 scaleFactor=1.1,
                 minNeighbors=4,
-                minSize=(60, 60),
+                minSize=(50, 50),
                 flags=cv2.CASCADE_SCALE_IMAGE
             )
             for (x, y, fw, fh) in detections:
@@ -183,8 +200,52 @@ class YOLOFaceDetector:
         self.last_det_time = det_time_ms
         return faces, det_time_ms
 
+    def extract_face_crop(self, frame_bgr, xyxy, padding=0.10):
+        """
+        Extracts a safe face crop from frame_bgr with optional context padding.
+        Returns:
+            face_crop (numpy.ndarray or None): cropped face image
+            crop_coords (tuple): (cx1, cy1, cx2, cy2) clamped coordinates
+        """
+        if frame_bgr is None or frame_bgr.size == 0 or xyxy is None:
+            return None, (0, 0, 0, 0)
+
+        h, w = frame_bgr.shape[:2]
+        x1, y1, x2, y2 = xyxy
+
+        fw = x2 - x1
+        fh = y2 - y1
+        pad_x = int(fw * padding)
+        pad_y = int(fh * padding)
+
+        cx1 = max(0, x1 - pad_x)
+        cy1 = max(0, y1 - pad_y)
+        cx2 = min(w, x2 + pad_x)
+        cy2 = min(h, y2 + pad_y)
+
+        if cx2 <= cx1 or cy2 <= cy1:
+            return None, (0, 0, 0, 0)
+
+        crop = frame_bgr[cy1:cy2, cx1:cx2]
+        if crop.size == 0 or crop.shape[0] < 5 or crop.shape[1] < 5:
+            return None, (0, 0, 0, 0)
+
+        return crop, (cx1, cy1, cx2, cy2)
+
 if __name__ == "__main__":
-    detector = YOLOFaceDetector()
-    dummy = np.zeros((480, 640, 3), dtype=np.uint8)
-    faces, latency = detector.detect(dummy)
-    print(f"Self-test: Backend={detector.backend}, Detected={len(faces)}, Latency={latency:.2f} ms")
+    detector = YOLOFaceDetector(conf_thresh=0.35)
+    test_img_path = "SignalWell/test_photos/WIN_20260901_17_11_36_Pro.jpg"
+    if os.path.exists(test_img_path):
+        img = cv2.imread(test_img_path)
+        faces, latency = detector.detect(img)
+        print(f"Self-test on {test_img_path}:")
+        print(f"  Faces found: {len(faces)}")
+        print(f"  Latency: {latency:.2f} ms")
+        if faces:
+            crop, coords = detector.extract_face_crop(img, faces[0]['xyxy'])
+            print(f"  Face #1: xyxy={faces[0]['xyxy']} conf={faces[0]['conf']:.2f}")
+            print(f"  Extracted crop: shape={crop.shape} coords={coords}")
+    else:
+        dummy = np.zeros((480, 640, 3), dtype=np.uint8)
+        faces, latency = detector.detect(dummy)
+        print(f"Self-test: Backend={detector.backend}, Detected={len(faces)}, Latency={latency:.2f} ms")
