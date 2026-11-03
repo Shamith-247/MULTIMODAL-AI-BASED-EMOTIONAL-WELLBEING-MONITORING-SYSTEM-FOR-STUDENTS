@@ -648,28 +648,11 @@ function renderLoop(){
     ctx.fillText(`● TRACKING ACTIVE • ${cw}x${ch} • ${currentFps} FPS • ${inferenceDurationMs}ms`, 14, 22);
 
   } else if(now - lastDetectionTime >= 500) {
-    // Face not locked — draw scanning dashed guide
-    const rx = cw * 0.25, ry = ch * 0.16, rw = cw * 0.5, rh = ch * 0.68;
-    ctx.save();
-    ctx.setLineDash([8, 8]);
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(95, 227, 154, 0.35)';
-    ctx.strokeRect(rx, ry, rw, rh);
-    ctx.restore();
-
-    const bannerW = 320, bannerH = 38;
-    const bx = (cw - bannerW) / 2, by = ry + rh / 2 - 19;
-    ctx.fillStyle = 'rgba(12, 15, 20, 0.88)';
-    ctx.strokeStyle = '#5FE39A';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    if(ctx.roundRect){ ctx.roundRect(bx, by, bannerW, bannerH, 19); } else { ctx.rect(bx, by, bannerW, bannerH); }
-    ctx.fill(); ctx.stroke();
-
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 13px "JetBrains Mono", monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText('SCANNING: Position face in center', cw / 2, by + 24);
+    // Face not detected — non-intrusive status watermark (no restrictive center guide box)
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#E5A84B';
+    ctx.font = '600 11px "JetBrains Mono", monospace';
+    ctx.fillText(`○ SEARCHING FOR FACE • ${cw}x${ch} • ${currentFps} FPS`, 14, 22);
   }
 
   // Live video clip recording compositing (only resize canvas if dimensions actually changed)

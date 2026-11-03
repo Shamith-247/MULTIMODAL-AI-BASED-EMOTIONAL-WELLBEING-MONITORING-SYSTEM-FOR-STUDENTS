@@ -348,3 +348,4 @@ if __name__ == "__main__":
     print(f"Self-test: Backend={clf.backend}, Top={top_em} ({conf*100:.1f}%), Latency={ms:.2f} ms")
     for k, v in probs.items():
         print(f"  {k:<10}: {v*100:.1f}%")
+
