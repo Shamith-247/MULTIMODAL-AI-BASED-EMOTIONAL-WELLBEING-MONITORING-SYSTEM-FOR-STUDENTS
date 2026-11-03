@@ -18,6 +18,9 @@ SIGNALWELL_VOICE/
 !SignalWell/app/models/**
 !models/
 !models/**
+models/face_model_v6_best.pt
+models/face_model_v7_best.pt
+models/best_face_model_v8_large_dataset.pt
 
 # Environments & IDEs
 .env
